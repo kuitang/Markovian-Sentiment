@@ -1,0 +1,3 @@
+[submodule "restipy"]
+	path = restipy
+	url = git@github.com:kuitang/restipy.git
