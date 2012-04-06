@@ -14,11 +14,8 @@ def extract_posts(dom):
 def text_from_post(post_dom):
     # Remove junk from post_dom
     post_dom.remove(post_dom.find("div[@id='info']"))
-
     for a_dom in post_dom.findall("a"): post_dom.remove(a)
-
-    script_dom = post_dom.find("script")
-    if script_dom: post_dom.remove(script_dom)
+    for script_dom in post_dom.find("script"): post_dom.remove(script_dom)
 
     return re.sub(url_re, '', unidecode(post_dom.text_content()))
 
