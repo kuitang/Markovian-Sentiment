@@ -1,4 +1,16 @@
 ./secrets.py
 data/*
+
+# Python
 *.pyc
+
+# Vim
 *.swp
+
+# Latex
+*.aux
+*.bbl
+*.blg
+*.log
+*.pdf
+
