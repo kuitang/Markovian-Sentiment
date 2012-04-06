@@ -5,7 +5,7 @@ import secrets
 from pprint import pprint
 import argparse, sys, time
 
-parser = argparse.ArgumentParser(description='Scrape some users blogs')
+parser = argparse.ArgumentParser(description='Scrape some users blogs.')
 parser.add_argument('blog', nargs='+')
 
 def is_success(response):
