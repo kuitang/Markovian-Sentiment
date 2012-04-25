@@ -1,43 +1,53 @@
 import numpy as np
-import scipy.sparse
+import time
 from models import sentiments, subjs
 
-def init_alpha(blogs):
+K = len(SUBJECTIVITIES)
+S = len(EMOTIONS)
+
+# TODO
+def update_alpha(blogs):
     pass
 
-def init_beta(blogs):
+def train_subjlda(blog, iters=800):
+    D = len(blog.docs)
+    V = len(blog.lexicon)
+    _, M, T = blog.shape()
 
-    pass
+    doc_assignment, 
+    sent_label, subj_label = init_labels(blog) 
 
-def init_gamma(blogs):
-    pass
+    if alpha is None:
+        alpha = update_alpha()
+    if beta is None:
+        beta = np.ones((S, V)) * 0.01 
+    if gamma is None:
+        L = blog.avg_len()
+        gamma = (0.05 * L ) / K
 
-class SubjLDA(object):
-    def __init__(self): pass
-    
-    def train(self, blog, alpha=None, beta=None, gamma=None, max_iter=800): 
-        D = len(blog.docs)
-        K = len(SUBJECTIVITIES)
-        S = len(EMOTIONS)
-        V = len(blog.lexicon)
-        _, M, T = blog.shape()
-        subj_labels = scipy.sparse.lil_matrix(shape=(D, M))
-        sent_labels = scipy.sparse.lil_matrix(shape=(D, M, T))
-        # Initialize the labels
-#        for d in blog.docs:
-#            for m in d.i_sentences:
-#
-#
-#        # Initializations follow those in [Lin03].
-        if alpha is None:
+    # Gibbs sample
+    for iter in xrange(iters):
+        # Shuffle
+        perm = np.random.permutation(blog.n_words)
+        WW = blog.words[perm]
+        DB = blog.doc_belong[perm]
+        SB = blog.sent_belong[perm]
+        SA = blog.sent_assign[perm]
 
-        if beta is None:
-            beta = np.ones((S, V)) * 0.01 
-        if gamma is None:
-            L = blog.avg_len()
-            gamma = (0.05 * L ) / K
-
+        for i, wi in enumerate(blog.words):
+            d = DB[i]
+            m = SB[i]
+            k = blog.subj_assign[m]
+            j = 
+            Ndk[d, k] -= 1
+            Nd[d] -= 1
+            # Equation 5.18
+            t1 = (Ndk[d,:] + gamma) / (Nd[d] + np.sum(gamma))
+            b = np.arange(0, Nmj[m,
+                        
             
 
 
+
 class HMM(object): pass
+
