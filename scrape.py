@@ -1,5 +1,4 @@
 from restipy import restipy
-from models import Document
 import secrets
 
 from pprint import pprint

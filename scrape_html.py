@@ -30,7 +30,7 @@ def make_dataset(blogdir):
         for post_dom in extract_posts(doc_dom):
             blog.add_doc(text_from_post(post_dom))
     
-    blog.freeze()
+    blog.vectorize()
     return blog
 
 if __name__ == "__main__":

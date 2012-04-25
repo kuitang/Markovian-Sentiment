@@ -37,23 +37,22 @@ def get_sentences(text, min_words=20):
         return sentences
 
 underscore_tr = string.maketrans('_', ' ')
-SENTIMENTS = ( 'anger', 'disgust', 'fear', 'joy', 'sadness', 'surprise' )
-sentiments = (set(),) * len(EMOTIONS)
+SENTIMENTS = ( 'neutral', 'anger', 'disgust', 'fear', 'joy', 'sadness', 'surprise' )
+sentiments = dict()
 def load_wordnetaffect_lite(dirpath=os.path.join('data', 'wordnetaffectlite')):
-    for i, e in enumerate(SENTIMENTS):
+    for i, e in enumerate(SENTIMENTS[1:]):
         with open(os.path.join(dirpath, e+'.txt')) as f:
             for r in csv.reader(f, delimiter=' '):
                 # the first column is junk; add the rest
                 # treat bigrams as two unigrams
                 for gram in r[1:]:
                     words = gram.split('_')
-                    sentiments[i].update(word_transform(w) for w in words)
+                    sentiments.update((word_transform(w), i) for w in words)
 
-load_wordnetaffect_lite()
-pprint(sentiments)
+#pprint(sentiments)
 
 SUBJECTIVITIES = ( 'neutral', 'positive', 'negative' )
-subjs = (set(),) * len(SUBJECTIVITIES)
+subjectivities = dict()
 SENTIWORD_POSSCORE_C = 2
 SENTIWORD_NEGSCORE_C = 3
 SENTIWORD_SYNSET_C = 4
@@ -74,15 +73,19 @@ def load_sentiwordnet(path=os.path.join('data', 'sentiwordnet')):
         for w in words:
             if abs(ps - ns) >= 0.5:
                 if ps > ns:
-                    subjs[1].add(w)
+                    subjectivities[w] = 1
                 else:
-                    subjs[2].add(w)
+                    subjectivities[w] = 2
             else:
-                subjs[0].add(w)
+                subjectivities[w] = 0
 
 # Load stuff
-load_sentiwordnet()
-pprint(subjs)
+loaded = False
+def load():
+    if not loaded:
+        loaded = True
+        load_sentiwordnet()
+        load_wordnetaffect_lite()
 
 class Lexicon(object):
     class FrozenError(Exception):
@@ -102,54 +105,92 @@ class Lexicon(object):
         return len(self.freqs)
 
     def freeze(self):
-        words_and_counts = self.freqs.most_common()
-        print "Lexicon.freeze: We have %d unique words"%len(words_and_counts)
-        self.wordidx = [ w[0] for w in words_and_counts ]
-        self.frozen = True
-    
-    def indices_for_words(words):
-        return array.array('i', (wordidx[w] for w in words))
+        if not self.frozen:
+            words_and_counts = self.freqs.most_common()
+            print "Lexicon.freeze: We have %d unique words"%len(words_and_counts)
+            self.worddict = dict(words_and_counts)
+            self.frozen = True
+
+    def __getitem__(self, word):
+        return self.worddict[word]
 
 class Blog(object):
     def __init__(self, min_words_per_post=20):
         self.docs = []
         self.lexicon = Lexicon()
         self.min_words_per_post = min_words_per_post
+        self.reject = 0
 
     # This should be the only function to see raw text.
     def add_doc(self, text):
         sentences = get_sentences(text, self.min_words_per_post) 
         if sentences:
-            self.docs.append(Document(sentences, self.lexicon))
-#        else:
-#            print "Document rejected: did not have %d words."%(
-#                    self.min_words_per_post, text)
+            self.docs.append(sentences)
+            self.lexicon.update(w for s in sentences for w in s)
+        else:
+            self.reject += 1
 
     def avg_len(self):
         return sum(len(d) for d in self.docs) / float(len(self.docs))
 
-    def shape(self):
-        D = len(self) # number of docs
-        M = max(len(d) for d in self.docs) # number of sentences
-        T = max(len(s) for s in d for d in self.docs) # number of words
-        return (D, M, T)
-    
-    def freeze(self):
-        print "Blog.freeze: %d posts added."%len(self.docs)
+    def vectorize(self):
+        """
+        Prepare bag of sentences/words.
+        """
+        print "Blog.freeze: %d posts added, %d rejected."%(
+                len(self.docs), self.reject)
         self.lexicon.freeze()
-        for d in self.docs: d.numericize()
+        self.n_sentences = sum(len(d) for d in self.docs)
+        self.n_words = sum(len(s) for d in self.docs for s in d)
+        print self.n_words
 
-class Document(object):
-    def __init__(self, sentences, lexicon):
-        self.sentences = sentences
-        self.lexicon = lexicon
-        lexicon.update(w for s in self.sentences for w in s)
-        print self.sentences
-    
-    def __len__(self):
-        return sum(len(s) for s in sentences)
+        # Index vectors for LDA
+        self.words  = np.empty(self.n_words, 'int')
+        self.doc_belong = np.empty_like(self.words)
+        self.sent_belong = np.empty_like(self.words)
 
-    def numericize(self):
-        self.i_sentences = map(self.lexicon.indices_for_words,
-                               self.sentences)
+        # Initial sentiment assignments from emotion lexicons
+        self.sent_assign = np.empty_like(self.words)
+        self.subj_assign = np.empty(self.n_sentences, 'int')
+
+        # Count variables (see page 101 of [Lin03])
+        # We use a flat index for sentences, for sentence variables omit the
+        # d index.
+        Nd = np.array([ len(d) for d in self.docs ], 'int')
+        Nm = np.zeros(self.n_sentences, 'int')
+        Ndk = np.zeros((len(self.docs), 2), 'int') # two subjectivities
+        Nmj = np.zeros((self.n_sentences, len(SENTIMENTS)), 'int')
+        Njr = np.zeros((len(SENTIMENTS), len(self.lexicon)), 'int')
+        Nj  = np.zeros(len(SENTIMENTS), 'int')
+        self.counts = ( Nd, Nm, Ndk, Nmj, Njr, Nj )
+
+        i = 0
+        s_i = 0
+        for id, d in enumerate(self.docs):
+            for s in d:
+                Nm[s_i] = len(s)
+
+                sent_subj = 0
+                for w in s:
+                    self.words[i] = self.lexicon[w]
+                    self.doc_belong[i] = id
+                    self.sent_belong[i] = s_i
+                    # TODO
+                    if w in sentiments:
+                        sent_subj = 1 
+                        self.sent_assign[i] = sentiments[w]
+                    if subjectivities.get(w, -1) == 0: # neutral
+                        sent_subj = 1
+                        self.sent_assign[i] = 0
+                    if sent_subj == 0: # if no prior knowledge, random assignment
+                        self.sent_assign[i] = np.random.randint(0, len(SENTIMENTS))
+                    Nmj[s_i, self.sent_assign[i]] += 1
+                    Njr[self.sent_assign[i], self.words[i]] += 1
+                    Nj[self.sent_assign[i]] += 1
+                    i += 1
+
+                # TODO
+                self.subj_assign[s_i] = sent_subj # Assign subjective or objective
+                Ndk[id, sent_subj] += 1
+                s_i += 1
 
