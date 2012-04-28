@@ -149,6 +149,8 @@ class Blog(object):
         self.doc_belong = np.empty_like(self.words)
         self.sent_belong = np.empty_like(self.words)
 
+        self.sent_to_doc = np.empty(self.n_sentences, 'int')
+
         # Initial sentiment assignments from emotion lexicons
         self.sent_assign = np.empty_like(self.words)
         self.subj_assign = np.empty(self.n_sentences, 'int')
@@ -168,6 +170,7 @@ class Blog(object):
         s_i = 0
         for id, d in enumerate(self.docs):
             for s in d:
+                self.sent_to_doc[s_i] = id
                 Nm[s_i] = len(s)
 
                 sent_subj = 0
