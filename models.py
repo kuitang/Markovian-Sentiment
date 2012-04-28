@@ -1,5 +1,6 @@
 from collections import Counter
 from pprint import pprint
+import cPickle
 import array, string, itertools, os, csv
 import numpy as np
 
@@ -38,54 +39,66 @@ def get_sentences(text, min_words=20):
 
 underscore_tr = string.maketrans('_', ' ')
 SENTIMENTS = ( 'neutral', 'anger', 'disgust', 'fear', 'joy', 'sadness', 'surprise' )
-sentiments = dict()
+sentiments = None
 def load_wordnetaffect_lite(dirpath=os.path.join('data', 'wordnetaffectlite')):
-    for i, e in enumerate(SENTIMENTS[1:]):
-        with open(os.path.join(dirpath, e+'.txt')) as f:
-            for r in csv.reader(f, delimiter=' '):
-                # the first column is junk; add the rest
-                # treat bigrams as two unigrams
-                for gram in r[1:]:
-                    words = gram.split('_')
-                    sentiments.update((word_transform(w), i) for w in words)
-
-#pprint(sentiments)
+    global sentiments
+    cache_path = os.path.join('data', 'sentiments.cache')
+    if os.path.exists(cache_path):
+        sentiments = cPickle.load(open(cache_path))
+    else:
+        sentiments = dict()
+        for i, e in enumerate(SENTIMENTS[1:]):
+            with open(os.path.join(dirpath, e+'.txt')) as f:
+                for r in csv.reader(f, delimiter=' '):
+                    # the first column is junk; add the rest
+                    # treat bigrams as two unigrams
+                    for gram in r[1:]:
+                        words = gram.split('_')
+                        sentiments.update((word_transform(w), i) for w in words)
+        cPickle.dump(sentiments, open(cache_path, 'w'))
 
 SUBJECTIVITIES = ( 'neutral', 'positive', 'negative' )
-subjectivities = dict()
+subjectivities = None
 SENTIWORD_POSSCORE_C = 2
 SENTIWORD_NEGSCORE_C = 3
 SENTIWORD_SYNSET_C = 4
 
 def load_sentiwordnet(path=os.path.join('data', 'sentiwordnet')):
-    for r in csv.reader(open(path), delimiter='\t'):
-        try:
-            ps, ns = float(r[SENTIWORD_POSSCORE_C]), float(r[SENTIWORD_NEGSCORE_C])
-        except ValueError as e:
-            print "Error: %s. Row was: %s"%(e, r)
+    global subjectivities
+    cache_path = os.path.join('data', 'subjectivities.cache')
+    if os.path.exists(cache_path):
+        subjectivities = cPickle.load(open(cache_path))
+    else:
+        subjectivities = dict()
+        for r in csv.reader(open(path), delimiter='\t'):
+            try:
+                ps, ns = float(r[SENTIWORD_POSSCORE_C]), float(r[SENTIWORD_NEGSCORE_C])
+            except ValueError as e:
+                print "Error: %s. Row was: %s"%(e, r)
 
-        # remove _ grams
-        unigrams = string.translate(r[SENTIWORD_SYNSET_C],
-                                    underscore_tr)
+            # remove _ grams
+            unigrams = string.translate(r[SENTIWORD_SYNSET_C],
+                                        underscore_tr)
 
-        # Each word in the synset is wwww#n, so remove last two chars
-        words = [ word_transform(w[:-2]) for w in unigrams ]
-        for w in words:
-            if abs(ps - ns) >= 0.5:
-                if ps > ns:
-                    subjectivities[w] = 1
+            # Each word in the synset is wwww#n, so remove last two chars
+            words = [ word_transform(w[:-2]) for w in unigrams.split() ]
+            for w in words:
+                if abs(ps - ns) >= 0.5:
+                    if ps > ns:
+                        subjectivities[w] = 1
+                    else:
+                        subjectivities[w] = 2
                 else:
-                    subjectivities[w] = 2
-            else:
-                subjectivities[w] = 0
+                    subjectivities[w] = 0
+    cPickle.dump(subjectivities, open(cache_path, 'w'))
 
 # Load stuff
-loaded = False
 def load():
-    if not loaded:
-        loaded = True
+    if not load.loaded:
+        load.loaded = True
         load_sentiwordnet()
         load_wordnetaffect_lite()
+load.loaded = False
 
 class Lexicon(object):
     class FrozenError(Exception):
@@ -109,6 +122,7 @@ class Lexicon(object):
             words_and_counts = self.freqs.most_common()
             print "Lexicon.freeze: We have %d unique words"%len(words_and_counts)
             self.worddict = dict(words_and_counts)
+            self.words = [ w for w, _ in words_and_counts ]
             self.frozen = True
 
     def __getitem__(self, word):
@@ -168,6 +182,8 @@ class Blog(object):
 
         i = 0
         s_i = 0
+        
+        sent_hits, sent_nonneut_hits, subj_hits, misses = 0, 0, 0, 0
         for id, d in enumerate(self.docs):
             for s in d:
                 self.sent_to_doc[s_i] = id
@@ -180,13 +196,21 @@ class Blog(object):
                     self.sent_belong[i] = s_i
                     # TODO
                     if w in sentiments:
-                        sent_subj = 1 
-                        self.sent_assign[i] = sentiments[w]
-                    if subjectivities.get(w, -1) == 0: # neutral
-                        sent_subj = 1
+                        sent_hits += 1
+                        st = sentiments[w]
+                        if st != 0: # not neutral
+                            sent_subj = 1 
+                            sent_nonneut_hits += 1
+                        self.sent_assign[i] = st
+                    elif subjectivities.get(w, -1) == 0: # neutral
+                        subj_hits += 1
                         self.sent_assign[i] = 0
-                    if sent_subj == 0: # if no prior knowledge, random assignment
+                    else: # if no prior knowledge, random assignment
+                        misses += 1
                         self.sent_assign[i] = np.random.randint(0, len(SENTIMENTS))
+                        if self.sent_assign[i] != 0:
+                            sent_subj = 1
+
                     Nmj[s_i, self.sent_assign[i]] += 1
                     Njr[self.sent_assign[i], self.words[i]] += 1
                     Nj[self.sent_assign[i]] += 1
@@ -196,4 +220,4 @@ class Blog(object):
                 self.subj_assign[s_i] = sent_subj # Assign subjective or objective
                 Ndk[id, sent_subj] += 1
                 s_i += 1
-
+        print "Initialization: sentiment hits = %d (of which %d non-neutral), subjectivity hits = %d, misses = %d"%(sent_hits, sent_nonneut_hits, subj_hits, misses)
