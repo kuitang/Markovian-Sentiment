@@ -4,33 +4,44 @@ import cPickle
 import array, string, itertools, os, csv
 import numpy as np
 
+from unidecode import unidecode
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize, sent_tokenize
 from nltk.stem.snowball import EnglishStemmer
 import nltk.data
 
 stemmer = EnglishStemmer()
-STOPWORDS = set(stopwords.words('english'))
+STOPWORDS = set((stemmer.stem(w) for w in stopwords.words('english')))
+
+print STOPWORDS
 
 def remove_stopwords(words):
 #    return words
-    return [ w for w in words if string.lower(w) not in STOPWORDS ]
+    return [ w for w in words if w not in STOPWORDS ]
 
 def word_transform(word):
     # don't stem
     # return word.lower().rstrip(string.punctuation)
-    return stemmer.stem(word.lower().rstrip(string.punctuation))
+    return stemmer.stem(word.lower().strip(string.punctuation))
 
 # stupid tokeniztion
 #def word_tokenize(sent):
 #    return sent.split()
 #
+
 def sent_transform(sent):
-    return [ word_transform(w) for w in remove_stopwords(word_tokenize(sent)) if
-                not (all(c in string.punctuation for c in w)) ]
+    lower = string.lower(sent)
+    words = word_tokenize(lower)
+#    print "WORDS    ", words
+    transformed = map(word_transform, words)
+    no_stopwords = remove_stopwords(transformed)
+#    print "SEMIFINAL", no_stopwords
+    # Get rid of empty words
+    return filter(None, no_stopwords)
 
 def get_sentences(text, min_words=20):
-    sentences = filter(None, map(sent_transform, sent_tokenize(text)))
+    ascii = unidecode(text)
+    sentences = filter(None, map(sent_transform, sent_tokenize(ascii)))
     wc = sum(len(s) for s in sentences)
     if wc < min_words:
         return None
@@ -98,6 +109,8 @@ def load():
         load.loaded = True
         load_sentiwordnet()
         load_wordnetaffect_lite()
+#    print subjectivities.keys()
+#    print sentiments.keys()
 load.loaded = False
 
 class Lexicon(object):
