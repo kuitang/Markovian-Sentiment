@@ -9,7 +9,7 @@ parser = argparse.ArgumentParser(description='Scrape dumped HTML into structured
 parser.add_argument('blogdir', nargs='+')
 
 def extract_posts(dom):
-    posts = dom.xpath("//*[contains(@class, 'post') or contains(@class, 'posts') or contains(@id, 'post') or contains(@id, 'posts')]")
+    posts = dom.xpath("//*[contains(@class, 'post') or contains(@class, 'posts') or contains(@id, 'post') or contains(@id, 'posts') or contains(@class, 'post-panel') or contains(@class, 'panel')]")
     articles = dom.xpath("//article")
     return posts + articles
 
