@@ -1,4 +1,4 @@
-import cPickle
+import cPickle, sys, os
 import models
 import numpy as np
 import matplotlib.pyplot as plt
@@ -22,7 +22,7 @@ def main(blogdir, outfile):
 
     result = { 'pi': pi, 'theta': theta, 'phi': phi, 'blog': blog }
 
-    cPickle.dump(result, args.outfile, -1)
+    cPickle.dump(result, open(args.outfile, 'w'), -1)
     
     # Print most probable words
     Njr = blog.counts[4]

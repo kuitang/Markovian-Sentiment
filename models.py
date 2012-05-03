@@ -63,7 +63,7 @@ def load_wordnetaffect_lite(dirpath=os.path.join('data', 'wordnetaffectlite')):
                     # treat bigrams as two unigrams
                     for gram in r[1:]:
                         words = gram.split('_')
-                        sentiments.update((word_transform(w), i) for w in words)
+                        sentiments.update((word_transform(w), i + 1) for w in words)
         cPickle.dump(sentiments, open(cache_path, 'w'))
 
 SUBJECTIVITIES = ( 'neutral', 'positive', 'negative' )
@@ -219,8 +219,6 @@ class Blog(object):
                     else: # if no prior knowledge, random assignment
                         misses += 1
                         self.sent_assign[i] = np.random.randint(0, len(SENTIMENTS))
-                        if self.sent_assign[i] != 0:
-                            sent_subj = 1
 
                     Nmj[s_i, self.sent_assign[i]] += 1
                     Njr[self.sent_assign[i], self.words[i]] += 1

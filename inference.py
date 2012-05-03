@@ -2,12 +2,9 @@ import numpy as np
 from scipy.special import psi, polygamma
 import time
 from models import SENTIMENTS, SUBJECTIVITIES
-from pprint import pprint
 
 K = len(SUBJECTIVITIES)
 S = len(SENTIMENTS)
-
-# TODO
 
 def discrete_sample(pdf):
     # Unnormalized inverse CDF sampling
@@ -86,7 +83,6 @@ def train_subjlda(blog, iters=400, alpha=None, beta=None, gamma=None):
     # TODO: Perhaps copy later
     WW, DB, SB, SA = blog.words, blog.doc_belong, blog.sent_belong, blog.sent_assign
     for iter in xrange(iters):
-        subj_changes, sent_changes = 0, 0
         start = time.time()
         # E-step: Gibbs sample
         # Shuffle
@@ -95,6 +91,11 @@ def train_subjlda(blog, iters=400, alpha=None, beta=None, gamma=None):
         DB = DB[perm]
         SB = SB[perm]
         SA = SA[perm]
+
+        # Count each time a word changed sentiments
+        sent_changes = np.zeros_like(WW)
+        # Count each time a sentence changed subjectivity
+        subj_changes = np.zeros_like(blog.sent_to_doc)
 
         for m in xrange(blog.n_sentences):
             d = blog.sent_to_doc[m]
@@ -115,9 +116,10 @@ def train_subjlda(blog, iters=400, alpha=None, beta=None, gamma=None):
 
             if np.any(np.isnan(e_518_pdf)) or np.all(e_518_pdf == 0):
                 # Overflow. TODO: Fix, and understand the equations!
+                print "Overflow!"
                 e_518_pdf = e_518_t1
             k_new = discrete_sample(e_518_pdf)
-            if k_new != k: subj_changes += 1
+            if k_new != k: subj_changes[m] += 1
 
             blog.subj_assign[m] = k_new
 
@@ -138,7 +140,7 @@ def train_subjlda(blog, iters=400, alpha=None, beta=None, gamma=None):
                 e_520_pdf = e_520_t1 * e_520_t2
 
                 j_new = discrete_sample(e_520_pdf)
-                if j_new != j: sent_changes += 1
+                if j_new != j: sent_changes[i] += 1
 
                 SA[i] = j_new
                 Nmj[m, j_new] += 1
@@ -155,8 +157,9 @@ def train_subjlda(blog, iters=400, alpha=None, beta=None, gamma=None):
             print "pi theta phi norms: %g %g %g"%(np.linalg.norm(pi - pi_new),
                     np.linalg.norm(theta - theta_new), np.linalg.norm(phi - phi_new))
             pi, theta, phi = pi_new, theta_new, phi_new
-        print "Iteration %d: %g seconds, %d subj changes, %d sent changes"%(
-                iter, time.time() - start, subj_changes, sent_changes)
+        print "Iteration %d: %g seconds"%(iter, time.time() - start)
+        print "Subjectivity change histogram:", np.histogram(subj_changes)
+        print "Sentiment change histogram:", np.histogram(sent_changes)
     return pi, theta, phi        
 
 class HMM(object): pass
