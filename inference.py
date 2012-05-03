@@ -13,7 +13,7 @@ def discrete_sample(pdf):
     # Unnormalized inverse CDF sampling
 #    assert(np.all(pdf >= 0))
     cdf = np.cumsum(pdf)
-    return np.flatnonzero(cdf > cdf[-1]*np.random.random())[0]
+    return np.flatnonzero(cdf > cdf[-1]*np.random.random())[0] 
 
 @np.vectorize
 def inversepsi(y, tol=1e-14):
@@ -55,7 +55,7 @@ def update_alpha(alpha, theta, tol=1e-10):
 
     return alpha
 
-def train_subjlda(blog, iters=800, alpha=None, beta=None, gamma=None):
+def train_subjlda(blog, iters=400, alpha=None, beta=None, gamma=None):
     D = len(blog.docs)
     V = len(blog.lexicon)
     #_, M, T = blog.shape()
@@ -86,6 +86,7 @@ def train_subjlda(blog, iters=800, alpha=None, beta=None, gamma=None):
     # TODO: Perhaps copy later
     WW, DB, SB, SA = blog.words, blog.doc_belong, blog.sent_belong, blog.sent_assign
     for iter in xrange(iters):
+        subj_changes, sent_changes = 0, 0
         start = time.time()
         # E-step: Gibbs sample
         # Shuffle
@@ -110,7 +111,13 @@ def train_subjlda(blog, iters=800, alpha=None, beta=None, gamma=None):
             e_518_t2_bot = np.prod(np.arange(0, Nm[m]) + np.sum(alpha[k, :]))
             e_518_t2 = e_518_t2_top / e_518_t2_bot
             e_518_pdf = e_518_t1 * e_518_t2
+            #print Nmj[m, j], Nm[m], e_518_t2_top, e_518_t2_bot, '->', e_518_pdf
+
+            if np.any(np.isnan(e_518_pdf)) or np.all(e_518_pdf == 0):
+                # Overflow. TODO: Fix, and understand the equations!
+                e_518_pdf = e_518_t1
             k_new = discrete_sample(e_518_pdf)
+            if k_new != k: subj_changes += 1
 
             blog.subj_assign[m] = k_new
 
@@ -131,6 +138,7 @@ def train_subjlda(blog, iters=800, alpha=None, beta=None, gamma=None):
                 e_520_pdf = e_520_t1 * e_520_t2
 
                 j_new = discrete_sample(e_520_pdf)
+                if j_new != j: sent_changes += 1
 
                 SA[i] = j_new
                 Nmj[m, j_new] += 1
@@ -138,13 +146,17 @@ def train_subjlda(blog, iters=800, alpha=None, beta=None, gamma=None):
                 Nj[j_new] += 1
         
         # M-step: MLE estimates
-        if iter % 20 == 0:
+        if iter % 2 == 0:
             alpha = update_alpha(alpha, theta)
-        if iter % 100 == 0:
+        if iter % 4 == 0:
             # Equations 5.21, 22, 23
             # Array broadcasting ftw... this is way better than in MATLAB
-            pi, theta, phi = update_pi_theta_phi()
-        print "Iteration %d took %g seconds"%(iter, time.time() - start)
+            pi_new, theta_new, phi_new = update_pi_theta_phi()
+            print "pi theta phi norms: %g %g %g"%(np.linalg.norm(pi - pi_new),
+                    np.linalg.norm(theta - theta_new), np.linalg.norm(phi - phi_new))
+            pi, theta, phi = pi_new, theta_new, phi_new
+        print "Iteration %d: %g seconds, %d subj changes, %d sent changes"%(
+                iter, time.time() - start, subj_changes, sent_changes)
     return pi, theta, phi        
 
 class HMM(object): pass

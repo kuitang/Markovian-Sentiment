@@ -13,8 +13,6 @@ import nltk.data
 stemmer = EnglishStemmer()
 STOPWORDS = set((stemmer.stem(w) for w in stopwords.words('english')))
 
-print STOPWORDS
-
 def remove_stopwords(words):
 #    return words
     return [ w for w in words if w not in STOPWORDS ]
@@ -134,8 +132,8 @@ class Lexicon(object):
         if not self.frozen:
             words_and_counts = self.freqs.most_common()
             print "Lexicon.freeze: We have %d unique words"%len(words_and_counts)
-            self.worddict = dict(words_and_counts)
             self.words = [ w for w, _ in words_and_counts ]
+            self.worddict = dict((w, i) for i, w in enumerate(self.words))
             self.frozen = True
 
     def __getitem__(self, word):
