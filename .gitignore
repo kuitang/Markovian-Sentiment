@@ -3,6 +3,13 @@ data/*
 
 # Python
 *.pyc
+*.prof
+*.profile
+
+# C
+*.o
+*.dylib
+*.so
 
 # Vim
 *.swp
