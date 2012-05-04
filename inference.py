@@ -1,6 +1,5 @@
-import numpy as np
+import time, pdb, numpy as np
 from scipy.special import psi, polygamma
-import time
 from models import SENTIMENTS, SUBJECTIVITIES
 
 K = len(SUBJECTIVITIES)
@@ -12,12 +11,12 @@ def discrete_sample(pdf):
     return np.flatnonzero(cdf > cdf[-1]*np.random.random())[0] 
 
 @np.vectorize
-def inversepsi(y, tol=1e-14):
+def inversepsi(y, tol=1e-8):
     # Appendix C in [Minka12]
     if y >= -2.22:
         x = np.exp(y) + 0.5
     else:
-        y = -1.0 / (y - psi(1))
+        x = -1.0 / (y - psi(1))
     
     # Newton
     while True:
@@ -26,63 +25,121 @@ def inversepsi(y, tol=1e-14):
         if abs(x - xold) < tol:
             return x
 
-#@profile
-def update_alpha(alpha, theta, sentence_subj, tol=1e-12):
-# Newton method in [Minka00]
+def update_alpha_fp(alpha, theta, sentence_subj, tol=1e-12):
+# Fixed point method in [Minka00]
     K = np.size(alpha, 0)
     M, S = np.shape(theta)
 
-    # Work on one row at a time
-    #pprint(np.log(theta))
-    #pprint(np.sum(np.log(theta), 0))
-    log_p = 1.0 / M * np.sum(np.log(theta), 0)
-    #pprint(log_p)
     for k in xrange(K):
         theta_k = theta[sentence_subj == k, :]
         log_p = 1.0 / M * np.sum(np.log(theta_k), 0)
+        print log_p
         while True:
             oldnorm = np.linalg.norm(alpha[k])
-            g = M*psi(np.sum(alpha[k])) - M*psi(alpha[k]) + M*log_p
-            # Diagonal
-            q = -M * polygamma(1, alpha[k])
-            z = M * polygamma(1, np.sum(alpha[k]))
-            b = np.sum(g / q) / (1.0 / z + np.sum(1.0 / q))
-
-            alpha[k] -= (g - b) / q
-                
+            alpha[k] = inversepsi(psi(np.sum(alpha[k])) + log_p)
             if abs(np.linalg.norm(alpha[k]) - oldnorm) < tol:
                 break
 
     return alpha
 
 #@profile
-def train_subjlda(blog, iters=400, alpha=None, beta=None, gamma=None):
+def update_alpha(alpha, theta, sentence_subj, reset_alpha=False, stepsize=.1, tol=1e-14):
+# Newton method in [Minka00]
+# NOTE: Need a small stepsize to prevent negative valued alpha
+# (I haven't thought about why yet... isn't the log likelihood convex?)
+    K = np.size(alpha, 0)
+    M, S = np.shape(theta)
+
+#    if reset_alpha:
+#        # Use moments to find appropriate initialization
+#        for k in xrange(K):
+#            theta_k = theta[sentence_subj == k, :]
+#            Ep1    = np.mean(theta_k[:, 1])
+#            Ep1_sq = np.mean(theta_k[:, 1] ** 2)
+#            print 'Ep1', Ep1, 'Ep1_sq', Ep1_sq
+#            sum_alpha = (Ep1 - Ep1_sq) / (Ep1_sq - Ep1 ** 2)
+#            Epk = np.mean(theta_k, 0)
+#            print 'Epk', Epk, 'sum_alpha', sum_alpha
+#            alpha[k] = Epk * sum_alpha
+#
+    for k in xrange(K):
+        theta_k = theta[sentence_subj == k, :]
+        log_p = 1.0 / M * np.sum(np.log(theta_k), 0)
+        while True:
+            oldnorm = np.linalg.norm(alpha[k])
+#            print np.sum(alpha[k])
+#            print log_p
+#            print 'alpha[%d] = %s'%(k, alpha[k])
+#            print 'log_p[%d] = %s'%(k, log_p)
+            g = M*psi(np.sum(alpha[k])) - M*psi(alpha[k]) + M*log_p
+            # Diagonal
+            q = -M * polygamma(1, alpha[k])
+            z = M * polygamma(1, np.sum(alpha[k]))
+            b = np.sum(g / q) / (1.0 / z + np.sum(1.0 / q))
+
+            #print "%s - %s"%(alpha[k], stepsize * (g - b) / q)
+            alpha[k] -= stepsize * (g - b) / q
+
+            # stupid: flip negative signs
+            # No, you can't do that; you break the code!
+#            if np.any(alpha[k] < 0):
+#                print "Warning: negative alpha; flipping sign", alpha[k]
+#                alpha[k][alpha[k] < 0] = -alpha[k][alpha[k] < 0]
+    
+            if abs(np.linalg.norm(alpha[k]) - oldnorm) < tol:
+                break
+
+    assert(np.all(alpha > 0))
+    return alpha
+
+#@profile
+def train_subjlda(blog, iters=400, beta=None, gamma=None):
     D = len(blog.docs)
     V = len(blog.lexicon)
     #_, M, T = blog.shape()
 
-    if alpha is None: # Asymmetric
-        alpha = np.ones((K,S)) / S
-
+    # TUNE PRIORS HERE!
     if beta is None: # Asymmetric
-        beta = np.ones((S, V)) * 0.01 
+        # Favor neutral about 10x more
+        beta = np.zeros((S, V))
+        beta[0,:] = 0.01
+        beta[1:,:] = 0.001
     if gamma is None: # Symmetric
+#        # Made this TINY
         L = blog.avg_len()
+#        gamma = 0.001
         gamma = (0.05 * L ) / K
+        print "gamma was set to %g"%gamma
     
     Nd, Nm, Ndk, Nmj, Njr, Nj = blog.counts
 
-    def update_pi_theta_phi():
+    def update_pi_phi():
+        # Equations 5.21, 22, 23
+        # Array broadcasting ftw... this is way better than in MATLAB
         pi = np.transpose(np.transpose(Ndk + gamma/K) / (Nd + gamma))
-#        pprint(np.shape(pi))
-        alpha_assigned = alpha[blog.subj_assign,:]
-        theta = np.transpose(np.transpose(Nmj + alpha_assigned) / (Nm + np.sum(alpha_assigned)))
-#        pprint(np.shape(theta))
         phi = np.transpose(np.transpose(Njr + beta) / (Nj + np.sum(beta, 1)))
-#        pprint(np.shape(phi))
-        return pi, theta, phi
+        return pi, phi
+    
+    pi, phi = update_pi_phi()
 
-    pi, theta, phi = update_pi_theta_phi()
+    # Initialize alpha from the data (IMPORTANT! Preserve asymmetry.)
+
+    # Initialize theta first, without zero prior (modified Equation 5.22)
+    print Nmj, Nm
+    theta = np.transpose(np.transpose(Nmj) / Nm) + 1e-10 # prevent zeros
+    alpha = np.ones((K,S)) * .01
+#    alpha = update_alpha_fp(alpha, theta, blog.subj_assign)
+    alpha = update_alpha(alpha, theta, blog.subj_assign)
+    print "Initial alpha:"
+    print alpha
+
+    def update_theta():
+        idxs = np.cast['int'](blog.subj_assign)
+        alpha_assigned = alpha[idxs,:]
+        assert(np.all(alpha_assigned > 0))
+        theta = np.transpose(np.transpose(Nmj + alpha_assigned) / (Nm + np.sum(alpha_assigned)))
+        assert(np.all(theta > 0))
+        return theta
 
     # TODO: Perhaps copy later
     WW, DB, SB, SA = blog.words, blog.doc_belong, blog.sent_belong, blog.sent_assign
@@ -103,6 +160,7 @@ def train_subjlda(blog, iters=400, alpha=None, beta=None, gamma=None):
         SA = SA[perm]
 
         for m in xrange(blog.n_sentences):
+
             d = blog.sent_to_doc[m]
             k = blog.subj_assign[m]  
 
@@ -112,16 +170,20 @@ def train_subjlda(blog, iters=400, alpha=None, beta=None, gamma=None):
             # Equation 5.18
             e_518_t1 = (Ndk[d,:] + gamma/K) / (Nd[d] + gamma)
             e_518_t2_top = 1.0
+            # Can we vectorize this?
             for j in xrange(S):
                 e_518_t2_top *= np.prod(np.arange(0, Nmj[m, j]) + alpha[k, j])
             e_518_t2_bot = np.prod(np.arange(0, Nm[m]) + np.sum(alpha[k, :]))
             e_518_t2 = e_518_t2_top / e_518_t2_bot
             e_518_pdf = e_518_t1 * e_518_t2
-            #print Nmj[m, j], Nm[m], e_518_t2_top, e_518_t2_bot, '->', e_518_pdf
 
             if np.any(np.isnan(e_518_pdf)) or np.all(e_518_pdf == 0):
                 # Overflow. TODO: Fix, and understand the equations!
-                print "Overflow: Nmj = %d, Nm = %d"%(Nmj[m,j], Nm[m])
+                print "Overflow in sentence %d."%m
+#                print "Nmj = %d, Nm = %d, t2_top = %g, t2_bot = %g, pdf = %s"%(
+#                        Nmj[m,j], Nm[m], e_518_t2_top, e_518_t2_bot, e_518_pdf)
+#                # We know this sentence 
+#                del sentidxs[m]
                 k_new = k
             else:
                 k_new = discrete_sample(e_518_pdf)
@@ -132,6 +194,7 @@ def train_subjlda(blog, iters=400, alpha=None, beta=None, gamma=None):
             Nd[d] += 1
 
             Nm_excl = Nm[m] - 1
+
             for i in np.flatnonzero(SB == m):
                 r = WW[i]
                 j = SA[i]
@@ -152,20 +215,28 @@ def train_subjlda(blog, iters=400, alpha=None, beta=None, gamma=None):
                 Njr[j_new, r] += 1
                 Nj[j_new] += 1
         
+#        # try a theta/alpha update, after 80 iters
+#        if iter % 80 == 79: # use -1 to avoid clobbering our original alpha
+#            theta = update_theta()
+#            print "New theta:", theta
+#            alpha = update_alpha(alpha, theta, blog.subj_assign)
+#            print "New alpha:", alpha
+#        
         # M-step: MLE estimates
-        if iter % 20 == 0:
-            # Equations 5.21, 22, 23
-            # Array broadcasting ftw... this is way better than in MATLAB
-            alpha = update_alpha(alpha, theta, blog.subj_assign)
-            pi_new, theta_new, phi_new = update_pi_theta_phi()
-            print "pi theta phi norms: %g %g %g"%(np.linalg.norm(pi - pi_new),
-                    np.linalg.norm(theta - theta_new), np.linalg.norm(phi - phi_new))
-            pi, theta, phi = pi_new, theta_new, phi_new
-            alpha = update_alpha(alpha, theta, blog.subj_assign)
-            print alpha
+#        if iter % 40 == 39: # use -1 to avoid clobbering our original alpha
+#            alpha = update_alpha(alpha, theta, blog.subj_assign)
+#            print "New alpha:", alpha
+#
+#        if iter % 200 == 99:
+#            theta = update_theta()
+#            print "New theta:", theta
+#            print "Min elt:", np.min(theta)
+
         print "Iteration %d: %g seconds"%(iter, time.time() - start)
-#        print "Average subjectivity changes:", np.mean(subj_changes)
-#        print "Sentiment changes:", np.mean(sent_changes)
+        print "              %d subj, %d obj"%(np.sum(blog.subj_assign == 1),
+                                               np.sum(blog.subj_assign == 0))
+    theta = update_theta()
+    pi, phi = update_pi_phi()
     return pi, theta, phi        
 
 class HMM(object): pass
