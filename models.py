@@ -170,25 +170,26 @@ class Blog(object):
         print self.n_words
 
         # Index vectors for LDA
-        self.words  = np.empty(self.n_words, 'int')
+        # FML; cannot store these as ints because we need to do floating divison!
+        self.words  = np.empty(self.n_words)
         self.doc_belong = np.empty_like(self.words)
         self.sent_belong = np.empty_like(self.words)
 
-        self.sent_to_doc = np.empty(self.n_sentences, 'int')
+        self.sent_to_doc = np.empty(self.n_sentences)
 
         # Initial sentiment assignments from emotion lexicons
         self.sent_assign = np.empty_like(self.words)
-        self.subj_assign = np.empty(self.n_sentences, 'int')
+        self.subj_assign = np.empty(self.n_sentences)
 
         # Count variables (see page 101 of [Lin03])
         # We use a flat index for sentences, for sentence variables omit the
         # d index.
-        Nd = np.array([ len(d) for d in self.docs ], 'int')
-        Nm = np.zeros(self.n_sentences, 'int')
-        Ndk = np.zeros((len(self.docs), 2), 'int') # two subjectivities
-        Nmj = np.zeros((self.n_sentences, len(SENTIMENTS)), 'int')
-        Njr = np.zeros((len(SENTIMENTS), len(self.lexicon)), 'int')
-        Nj  = np.zeros(len(SENTIMENTS), 'int')
+        Nd = np.array([ len(d) for d in self.docs ])
+        Nm = np.zeros(self.n_sentences)
+        Ndk = np.zeros((len(self.docs), 2)) # two subjectivities
+        Nmj = np.zeros((self.n_sentences, len(SENTIMENTS)))
+        Njr = np.zeros((len(SENTIMENTS), len(self.lexicon)))
+        Nj  = np.zeros(len(SENTIMENTS))
         self.counts = ( Nd, Nm, Ndk, Nmj, Njr, Nj )
 
         i = 0
@@ -209,17 +210,28 @@ class Blog(object):
                     # TODO
                     if w in sentiments:
                         sent_hits += 1
-                        st = sentiments[w]
-                        if st != 0: # not neutral
+                        self.sent_assign[i] = sentiments[w]
+                        if self.sent_assign[i] != 0: # not neutral
                             sent_subj = 1 
                             sent_nonneut_hits += 1
-                        self.sent_assign[i] = st
                     elif subjectivities.get(w, -1) == 0: # neutral
                         subj_hits += 1
                         self.sent_assign[i] = 0
                     else: # if no prior knowledge, random assignment
                         misses += 1
                         self.sent_assign[i] = np.random.randint(0, len(SENTIMENTS))
+                        # Prior-prior knowledge is uniform... could potentially improve
+                        # Should really randomly assign these proportionally, in
+                        # accordance with *some* prior
+                        sent_subj = np.random.randint(2) 
+                        # for some reason this makes seeking alpha diverge...
+                        # I know why: you introduce some "singularity" into alpha,
+                        # because then ALL objective words are neutral, which is
+                        # not always the case!
+                        # if self.sent_assign[i] != 0: # not neutral
+                        #     sent_subj = 1 
+                        #
+                        # Correct assignment is randomly assign neutral/nonneutral.
 
                     Nmj[s_i, self.sent_assign[i]] += 1
                     Njr[self.sent_assign[i], self.words[i]] += 1
@@ -231,3 +243,4 @@ class Blog(object):
                 Ndk[id, sent_subj] += 1
                 s_i += 1
         print "Initialization: sentiment hits = %d (of which %d non-neutral), subjectivity hits = %d, misses = %d"%(sent_hits, sent_nonneut_hits, subj_hits, misses)
+        print "%d subj, %d obj"%(np.sum(self.subj_assign == 1), np.sum(self.subj_assign == 0))
