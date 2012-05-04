@@ -29,14 +29,13 @@ def main(blogdir, outfile):
     idxs = np.argsort(Njr, 1)
     phi_idxs = np.argsort(phi, 1)
     for e, irow, phi_irow in zip(models.SENTIMENTS, idxs, phi_idxs):
-        print 'Njr', e, [ blog.lexicon.words[i] for i in irow[::-1][:10] ]
-        print 'phi', e, [ blog.lexicon.words[i] for i in phi_irow[::-1][:10] ]
+        print e, [ blog.lexicon.words[i] for i in phi_irow[::-1][:30] ]
 
-    print "Sentiment distribution over words"
-    for i, e in enumerate(models.SENTIMENTS):
-        plt.plot(phi[i,:])
-        plt.show()
-
+#    print "Sentiment distribution over words"
+#    for i, e in enumerate(models.SENTIMENTS):
+#        plt.plot(phi[i,:])
+#        plt.show()
+#
     plt.hist(blog.subj_assign, len(models.SUBJECTIVITIES))
     plt.show()
     plt.hist(blog.sent_assign, len(models.SENTIMENTS))

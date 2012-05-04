@@ -8,7 +8,6 @@ S = len(SENTIMENTS)
 
 def discrete_sample(pdf):
     # Unnormalized inverse CDF sampling
-#    assert(np.all(pdf >= 0))
     cdf = np.cumsum(pdf)
     return np.flatnonzero(cdf > cdf[-1]*np.random.random())[0] 
 
@@ -27,7 +26,8 @@ def inversepsi(y, tol=1e-14):
         if abs(x - xold) < tol:
             return x
 
-def update_alpha(alpha, theta, tol=1e-10):
+#@profile
+def update_alpha(alpha, theta, sentence_subj, tol=1e-12):
 # Newton method in [Minka00]
     K = np.size(alpha, 0)
     M, S = np.shape(theta)
@@ -38,11 +38,14 @@ def update_alpha(alpha, theta, tol=1e-10):
     log_p = 1.0 / M * np.sum(np.log(theta), 0)
     #pprint(log_p)
     for k in xrange(K):
+        theta_k = theta[sentence_subj == k, :]
+        log_p = 1.0 / M * np.sum(np.log(theta_k), 0)
         while True:
             oldnorm = np.linalg.norm(alpha[k])
-            g = M * psi(np.sum(alpha[k])) - M*psi(alpha[k]) + M*log_p
+            g = M*psi(np.sum(alpha[k])) - M*psi(alpha[k]) + M*log_p
+            # Diagonal
             q = -M * polygamma(1, alpha[k])
-            z = M * polygamma(1, np.sum(alpha[k], 0))
+            z = M * polygamma(1, np.sum(alpha[k]))
             b = np.sum(g / q) / (1.0 / z + np.sum(1.0 / q))
 
             alpha[k] -= (g - b) / q
@@ -52,6 +55,7 @@ def update_alpha(alpha, theta, tol=1e-10):
 
     return alpha
 
+#@profile
 def train_subjlda(blog, iters=400, alpha=None, beta=None, gamma=None):
     D = len(blog.docs)
     V = len(blog.lexicon)
@@ -82,6 +86,12 @@ def train_subjlda(blog, iters=400, alpha=None, beta=None, gamma=None):
 
     # TODO: Perhaps copy later
     WW, DB, SB, SA = blog.words, blog.doc_belong, blog.sent_belong, blog.sent_assign
+
+    # Count each time a word changed sentiments
+#    sent_changes = np.zeros_like(WW)
+#    # Count each time a sentence changed subjectivity
+#    subj_changes = np.zeros_like(blog.sent_to_doc)
+#
     for iter in xrange(iters):
         start = time.time()
         # E-step: Gibbs sample
@@ -91,11 +101,6 @@ def train_subjlda(blog, iters=400, alpha=None, beta=None, gamma=None):
         DB = DB[perm]
         SB = SB[perm]
         SA = SA[perm]
-
-        # Count each time a word changed sentiments
-        sent_changes = np.zeros_like(WW)
-        # Count each time a sentence changed subjectivity
-        subj_changes = np.zeros_like(blog.sent_to_doc)
 
         for m in xrange(blog.n_sentences):
             d = blog.sent_to_doc[m]
@@ -116,10 +121,10 @@ def train_subjlda(blog, iters=400, alpha=None, beta=None, gamma=None):
 
             if np.any(np.isnan(e_518_pdf)) or np.all(e_518_pdf == 0):
                 # Overflow. TODO: Fix, and understand the equations!
-                print "Overflow!"
-                e_518_pdf = e_518_t1
-            k_new = discrete_sample(e_518_pdf)
-            if k_new != k: subj_changes[m] += 1
+                print "Overflow: Nmj = %d, Nm = %d"%(Nmj[m,j], Nm[m])
+                k_new = k
+            else:
+                k_new = discrete_sample(e_518_pdf)
 
             blog.subj_assign[m] = k_new
 
@@ -136,11 +141,11 @@ def train_subjlda(blog, iters=400, alpha=None, beta=None, gamma=None):
                 Nj[j] -= 1
 
                 e_520_t1 = (Nmj[m,:] + alpha[k_new,:]) / (Nm_excl + np.sum(alpha[k_new,:]))
-                e_520_t2 = (Njr[:,r] + beta[:,r]) / (Nj + np.sum(beta[:,r]))
+                e_520_t2 = (Njr[:,r] + beta[:,r]) / (Nj + np.sum(beta, 1))
                 e_520_pdf = e_520_t1 * e_520_t2
 
                 j_new = discrete_sample(e_520_pdf)
-                if j_new != j: sent_changes[i] += 1
+#                if j_new != j: sent_changes[i] += 1
 
                 SA[i] = j_new
                 Nmj[m, j_new] += 1
@@ -148,18 +153,19 @@ def train_subjlda(blog, iters=400, alpha=None, beta=None, gamma=None):
                 Nj[j_new] += 1
         
         # M-step: MLE estimates
-        if iter % 2 == 0:
-            alpha = update_alpha(alpha, theta)
-        if iter % 4 == 0:
+        if iter % 20 == 0:
             # Equations 5.21, 22, 23
             # Array broadcasting ftw... this is way better than in MATLAB
+            alpha = update_alpha(alpha, theta, blog.subj_assign)
             pi_new, theta_new, phi_new = update_pi_theta_phi()
             print "pi theta phi norms: %g %g %g"%(np.linalg.norm(pi - pi_new),
                     np.linalg.norm(theta - theta_new), np.linalg.norm(phi - phi_new))
             pi, theta, phi = pi_new, theta_new, phi_new
+            alpha = update_alpha(alpha, theta, blog.subj_assign)
+            print alpha
         print "Iteration %d: %g seconds"%(iter, time.time() - start)
-        print "Subjectivity change histogram:", np.histogram(subj_changes)
-        print "Sentiment change histogram:", np.histogram(sent_changes)
+#        print "Average subjectivity changes:", np.mean(subj_changes)
+#        print "Sentiment changes:", np.mean(sent_changes)
     return pi, theta, phi        
 
 class HMM(object): pass

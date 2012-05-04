@@ -66,7 +66,7 @@ def load_wordnetaffect_lite(dirpath=os.path.join('data', 'wordnetaffectlite')):
                         sentiments.update((word_transform(w), i + 1) for w in words)
         cPickle.dump(sentiments, open(cache_path, 'w'))
 
-SUBJECTIVITIES = ( 'neutral', 'positive', 'negative' )
+SUBJECTIVITIES = ( 'objective', 'subjective' )
 subjectivities = None
 SENTIWORD_POSSCORE_C = 2
 SENTIWORD_NEGSCORE_C = 3
@@ -201,6 +201,7 @@ class Blog(object):
                 Nm[s_i] = len(s)
 
                 sent_subj = 0
+#                sent_subj = np.random.randint(2)
                 for w in s:
                     self.words[i] = self.lexicon[w]
                     self.doc_belong[i] = id
