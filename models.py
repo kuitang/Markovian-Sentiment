@@ -205,13 +205,6 @@ class Blog(object):
         self.topic_N      = np.zeros(K)
         self.doc_N        = np.zeros(D)
 
-        # Initialize the ASYMMETRIC PRIOR!!!
-        # Ratio of 0 : 1 is 1 : 10
-        self.lam = np.ones((S, V)) * 0.1
-        for w, i in self.lexicon.worddict.iteritems():
-            k = sentiments.get(w, 0)
-            self.lam[k, i] = 1
-        
         sent_hits, sent_nonneut_hits, subj_hits, misses = 0, 0, 0, 0
         i = 0
         for id, doc in enumerate(self.docs):
@@ -258,6 +251,13 @@ class Blog(object):
         self.n_sentences = sum(len(d) for d in self.docs)
         self.n_words = sum(len(s) for d in self.docs for s in d)
         print self.n_words
+
+        # Initialize the ASYMMETRIC PRIOR!!!
+        # Ratio of 0 : 1 is 1 : 10
+        self.lam = np.ones((S, V)) * 0.1
+        for w, i in self.lexicon.worddict.iteritems():
+            k = sentiments.get(w, 0)
+            self.lam[k, i] = 1
 
         # Index vectors for LDA
         # FML; cannot store these as ints because we need to do floating divison!
