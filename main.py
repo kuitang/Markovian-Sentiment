@@ -1,7 +1,6 @@
 import cPickle, sys, os
 import models
 import numpy as np
-import matplotlib.pyplot as plt
 import argparse
 import scrape_html
 import inference
@@ -11,6 +10,7 @@ parser = argparse.ArgumentParser(description='Driver program for sentiment analy
 parser.add_argument('blogdir')
 parser.add_argument('algorithm')
 parser.add_argument('-o', default='lastrun.dat')
+parser.add_argument('-g')
 
 def subjlda(blog, outfile):
     blog.vectorize()
@@ -29,15 +29,17 @@ def analyze_subjlda(result):
     for e, irow, phi_irow in zip(models.SENTIMENTS, idxs, phi_idxs):
         print e, [ blog.lexicon.words[i] for i in phi_irow[::-1][:30] ]
 
-    print "Sentiment distribution over words"
-    for i, e in enumerate(models.SENTIMENTS):
-        plt.plot(phi[i,:])
-        plt.show()
+    if graphs:
+        import matplotlib.pyplot as plt
+        print "Sentiment distribution over words"
+        for i, e in enumerate(models.SENTIMENTS):
+            plt.plot(phi[i,:])
+            plt.show()
 
-    plt.hist(blog.subj_assign, len(models.SUBJECTIVITIES))
-    plt.show()
-    plt.hist(blog.sent_assign, len(models.SENTIMENTS))
-    plt.show()
+        plt.hist(blog.subj_assign, len(models.SUBJECTIVITIES))
+        plt.show()
+        plt.hist(blog.sent_assign, len(models.SENTIMENTS))
+        plt.show()
 
 def doc_lda(blog, outfile):
     blog.vectorize_lda_doc()
