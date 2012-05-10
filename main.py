@@ -63,6 +63,9 @@ if __name__ == "__main__":
 
     models.load()
     blog = scrape_html.make_dataset(args.blogdir)
+
+    # Set seed for reproducibility
+    np.random.seed(282629734)
     
     dispatch[args.algorithm](blog, args.o) 
 

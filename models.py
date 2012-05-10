@@ -48,23 +48,40 @@ def get_sentences(text, min_words=20):
         return sentences
 
 underscore_tr = string.maketrans('_', ' ')
-SENTIMENTS = ( 'neutral', 'anger', 'disgust', 'fear', 'joy', 'sadness', 'surprise' )
+#SENTIMENTS = ( 'neutral', 'anger', 'disgust', 'fear', 'joy', 'sadness', 'surprise' )
+#sentiments = None
+#def load_wordnetaffect_lite(dirpath=os.path.join('data', 'wordnetaffectlite')):
+#    global sentiments
+#    cache_path = os.path.join('data', 'sentiments.cache')
+#    if os.path.exists(cache_path):
+#        sentiments = cPickle.load(open(cache_path))
+#    else:
+#        sentiments = dict()
+#        for i, e in enumerate(SENTIMENTS[1:]):
+#            with open(os.path.join(dirpath, e+'.txt')) as f:
+#                for r in csv.reader(f, delimiter=' '):
+#                    # the first column is junk; add the rest
+#                    # treat bigrams as two unigrams
+#                    for gram in r[1:]:
+#                        words = gram.split('_')
+#                        sentiments.update((word_transform(w), i + 1) for w in words)
+#        cPickle.dump(sentiments, open(cache_path, 'w'))
+#
+SENTIMENTS = ( 'neutral', 'positive', 'negative' )
 sentiments = None
-def load_wordnetaffect_lite(dirpath=os.path.join('data', 'wordnetaffectlite')):
+
+SUBJCLUE_COLS = ( 0, 2, -1 ) # type, word, pole
+def load_subjclue(path=os.path.join('data', 'subjclueslen1-HLTEMNLP05.tff')): 
     global sentiments
     cache_path = os.path.join('data', 'sentiments.cache')
     if os.path.exists(cache_path):
         sentiments = cPickle.load(open(cache_path))
     else:
         sentiments = dict()
-        for i, e in enumerate(SENTIMENTS[1:]):
-            with open(os.path.join(dirpath, e+'.txt')) as f:
-                for r in csv.reader(f, delimiter=' '):
-                    # the first column is junk; add the rest
-                    # treat bigrams as two unigrams
-                    for gram in r[1:]:
-                        words = gram.split('_')
-                        sentiments.update((word_transform(w), i + 1) for w in words)
+        for r in csv.reader(open(path), delimiter=' '):
+            cols = [ r[c].split('=')[1] for c in SUBJCLUE_COLS ]
+            if cols[0] == 'strongsubj':
+                sentiments[word_transform(cols[1])] = 1 if cols[2] == 'positive' else 2
         cPickle.dump(sentiments, open(cache_path, 'w'))
 
 SUBJECTIVITIES = ( 'objective', 'subjective' )
@@ -107,7 +124,8 @@ def load():
     if not load.loaded:
         load.loaded = True
         load_sentiwordnet()
-        load_wordnetaffect_lite()
+        load_subjclue()
+#        load_wordnetaffect_lite()
 #    print subjectivities.keys()
 #    print sentiments.keys()
 load.loaded = False
@@ -143,21 +161,28 @@ class Lexicon(object):
 class Blog(object):
     def __init__(self, min_words_per_post=20):
         self.docs = []
+        self.test_docs = []
         self.lexicon = Lexicon()
         self.min_words_per_post = min_words_per_post
         self.reject = 0
 
     # This should be the only function to see raw text.
-    def add_doc(self, text):
+    def add_doc(self, text, test_prop=0.2):
         sentences = get_sentences(text, self.min_words_per_post) 
         if sentences:
-            self.docs.append(sentences)
             self.lexicon.update(w for s in sentences for w in s)
+            if np.random.binomial(1, test_prop): # test set instead
+                self.test_docs.append(sentences)
+            else:
+                self.docs.append(sentences)
         else:
             self.reject += 1
 
     def avg_len(self):
         return sum(len(d) for d in self.docs) / float(len(self.docs))
+
+    def vectorize_test_set(self):
+        pass
 
     def vectorize_lda_doc(self, p_subjective=.1):
         """
@@ -280,7 +305,6 @@ class Blog(object):
                         # Prior-prior knowledge is uniform... could potentially improve
                         # Should really randomly assign these proportionally, in
                         # accordance with *some* prior
-                        sent_subj = np.random.binomial(1, p_subjective)
                         # for some reason this makes seeking alpha diverge...
                         # I know why: you introduce some "singularity" into alpha,
                         # because then ALL objective words are neutral, which is
