@@ -9,7 +9,6 @@
 \usepackage{graphicx}
 \usepackage{amsfonts}
 \usepackage{algorithm}
-\usepackage{algorithmic}
 \usepackage{easybmat}
 \usepackage{footmisc}
 \renewcommand\algorithmiccomment[1]{// \textit{#1}}
@@ -82,8 +81,7 @@ As a person is ultimately driven to action based on emotion,
 \subsection{Related Work}
 \citep{lin03}
 \subsection{Problem Description}
-
-\section{Priors}
+Given a set of blog posts, can we infer a probability model of the 
 
 \section{Models}
 \subsection{Latent Dirichlet Allocation}
@@ -111,7 +109,7 @@ capture local sentiment. The generative procedure for SubjLDA follows:
 \item For each sentence $j$:
 \begin{enumerate}
 \item Draw a subjectivity label $s_{d,j} ~ \mbox{Multinomial}(\mathbf{pi}_d)$
-\item Draw a $\mathbf{theta}_{d,m} ~ \mbox{Dir}(\mathbf{\alpha_{s_{d,m}}})$, a distribution of sentiments for sentence $j$ of document $d$.
+\item Draw a $\mathbf{\theta}_{d,m} ~ \mbox{Dir}(\mathbf{\alpha_{s_{d,m}}})$, a distribution of sentiments for sentence $j$ of document $d$.
 \item For each $N_{d,m}$ word position in sentence $m$ of document $d$
 \begin{enumerate}
 \item Draw a sentiment $l_{d,m,t} ~ \mbox{Mult}(\mathbf{\theta}_{s_{d,m}})$
@@ -135,20 +133,52 @@ and that words may nobe be distributed uniformly across emotions.
 Further details on these priors below.
 
 \subsection{Priors}
+We follow Lin's approach to make this model semi-supervised by
+initializing the latent variables and model priors based on
+existing corpora. We use WordNet-Affect 1.0 \citep{strapparava04},
+which provides 606 words labelled with one of ``anger'', ``disgust'',
+``fear'', ``joy'', ``sadness'', ``surprise''. We also used the
+neutral words from SentiWordNet~\citep{baccianella10}, the same
+as Lin.
+
+The majority of words were neutral. Of 286,997 words in the 
+poetry blog, 240,087, or 83.6\%, were discovered to be neutral.
+
+If a word was not matched by emotion or neutrality (rare; less than
+10\%) of the time, we randomly assigned it an emotion.
 
 \section{Data}
-Data were scraped from Tumblr~\citep{tumblr} in April 2012. For
-these results, we analyzed three blogs, consisting mainly of personal
-writings in politics, prose, and poetry. All posts were by the same
-user---a critical feature of our modelling approach.
+Data were scraped from Tumblr~\citep{tumblr} in April 2012. The API
+was not usable because it only allowed access to users who have
+authenticated the API key for this application. However, as this
+model works on only a single user's blog, applications could work
+over the API.
+
+Not all Tumblr sites shared the same HTML layout, but upon inspection
+of the source codes, all textual content was reduced to a small
+number of possible XPath queries. Parsing and text extracton was
+performed with lxml.
+
+For these results, we analyzed three blogs, consisting mainly of
+personal writings in politics, prose, and poetry. All posts were
+by the same user---a critical feature of our modelling approach.
 
 To limit ourselves to ``important'' posts, we dropped all posts
 with fewer than 20 words. We randomly chose 20\% to hold as a test
 set to evaluate our model's performance
 
+\subsection{Feature Extraction}
+To parse the data into sentences and words, we used the standard
+Punkt sentence tokenizer in NLTK~\citep{bird09}. To reduce data
+sparsity, we ran the Porter stemmer and removed stemmed stopwords.
+\fix{TODO: ADD COUNTING STATISTICS.}
 
-\section{Experiments}
-A simple single-core Python implementation of Gibbs sampling for SubjLDA processed on average 2,715.8 words per second, which comes to 26.0 seconds per iteration for the poetry blog of 1036 posts. Since the Gibbs sampler must run for hundreds of iterations before convergence, more efficient approaches, such as variational inference~\citep{winn2005} should be considered for large-scale web applications.
+\section{Experiments} 
+A simple single-core Python implementation of Gibbs sampling for
+SubjLDA processed on average 2,715.8 words per second, which comes
+to 26.0 seconds per iteration for the poetry blog of 1036 posts.
+We ran experiments overnight on an eight-core Amazon EC2 high-CPU
+instance.
 
 \section{Results}
 
@@ -159,11 +189,18 @@ PUT HISTOGRAMS OF TOPICS FOR ONE RUN
 PUT A LOG LIKELIHOOD OF SOMETHING.
 
 \subsection{Evaluation}
-Lin did not derive a conditional distribution for the likelihood of SubjLDA, so we derive it here.
+Lin did not derive a conditional distribution for the likelihood
+of SubjLDA, so we derive it here.
 
-We evalute the perplexity of the test set \citep{blei03}:
+Our metric is the perplexity of the test set \citep{blei03}.
+Intuitively, if probability model assigns high probabilities to
+newly observed events, then the exponent term is large, so the
+perplexity is low. The model is less ``surprised'' by the new
+information and in fact already predicted something close. Since
+perplexity is evaluated on a test set, lower perplexity implies
+better generalization.
 \begin{equation}
-perp(D_{test}) = \exp{-\frac{\sum_{d=1}^M \log{p(\mathbf{w}_d)}}{\sum_{d=1}^N N_d}}
+perp(D_{test}) = \exp\left{{-\frac{\sum_{d=1}^M \log{p(\mathbf{w}_d)}}{\sum_{d=1}^N N_d}}\left}
 \end{equation}
 where $\mathbf{w}_d$ denotes the bag-of-words representation for
 document $d$. We both models, we compare against a baseline model
@@ -186,18 +223,47 @@ While the results for this project were not quite as I had hoped,
 I've certainly learned a lot from doing this work.
 
 First, as described in the abstract, \emph{immature} really does
-capture the state of the art in web sentiment analysis. This is partially
-due to the nature of sentiment data: all emotions are hidden variables
-because nobody can read your mind. So any observations, textual,
-verbal, or physiological are necessarily noise. Words are especially
-ambiguous at communicating emotion, though they are the most easily
-accessible data. Nevertheless, good classifications results for
-large supervised problems have been achieved, a large number of which
-use SVMs. Sufficient data does indeed overwhelm noise, and does not
-require much clever trickery to tease out the relationships within the
-data. This was a lesson often reiterated during class which I am
-learning by omission. But conversely, if your data is too sparse,
-then no amount of nonlinear Bayesian trickery may be able to save you.
+capture the state of the art in web sentiment analysis. Several
+well-cited approaches, including \citep{mishne06, alm08, sood08}
+employ elementary techniques: \citep{mishne06} uses linear regression
+with automatic feature selection; \citep{sood08} uses straight
+k-means. While these discriminative models successfully classify
+these selected datasets, they give little insight as to the
+dynamics of a single person's emotional state. Thus, they are of
+less utility to, say, designing human-computer interfaces to
+respond according to a user's emotions.
+
+This is partially due to the nature of emotion: all emotions
+are hidden variables because nobody can read your mind. So any
+observations, textual, verbal, or physiological are necessarily
+noise. Words are especially ambiguous at communicating emotion,
+though they are the most easily accessible data. Nevertheless, good
+classifications results for large supervised problems have been
+achieved, a large number of which use SVMs. Sufficient data does
+indeed overwhelm noise, and does not require much clever trickery
+to tease out the relationships within the data. This was a lesson
+often reiterated during class which I am learning by omission. But
+conversely, if your data is too sparse, then no amount of nonlinear
+Bayesian trickery may be able to save you.
+
+I had hoped to find some work in the literature building psychological
+or neurologically-based models for sentiment analysis, but alas
+these hopes are a bit beyond the time for this field.
+
+Second, I learned just how much of a pain it is to deal with all
+but the most trivial of datasets. Many results were obtained with
+a 8.1 million-post Livejournal corpus. This data if especially
+important because Livejournal users can optionally tag posts with
+a \emph{mood}, providing a huge labelled dataset\citep{mischne2005}.
+Though many papers used this dataset, after hours of crawling the
+web, a download was nowhere to be found.
+
+Other datasets were not trivial to acquire or use. Many required
+filling out a registration form and waiting for days \citep{baccianella10}.
+The data came in a hodge-podge of text formats, requiring
+lots of crufy parsing code, a distraction from the real
+data-driven modelling. Scraping your own textual data doesn't
+give you labels, preventing access to supervised methods.
 
 \begin{small}
 \bibliographystyle{plainnat}
