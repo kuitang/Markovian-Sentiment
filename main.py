@@ -1,7 +1,6 @@
 import cPickle, sys, os
 import models
 import numpy as np
-import matplotlib.pyplot as plt
 import argparse
 import scrape_html
 import inference
@@ -10,8 +9,9 @@ import inference
 parser = argparse.ArgumentParser(description='Driver program for sentiment analysis')
 parser.add_argument('blogdir')
 parser.add_argument('-o', default='lastrun.dat')
+parser.add_argument('-g')
 
-def main(blogdir, outfile):
+def main(blogdir, outfile, graphs):
     models.load()
     blog = scrape_html.make_dataset(args.blogdir)
     # Diagnostic plots
@@ -22,11 +22,11 @@ def main(blogdir, outfile):
 
     result = { 'pi': pi, 'theta': theta, 'phi': phi, 'blog': blog }
     cPickle.dump(result, open(outfile, 'w'), -1)
-    analyze(result)
+    analyze(result, graphs)
 
     return 0
 
-def analyze(result):
+def analyze(result, graphs):
     blog, phi = result['blog'], result['phi']
     # Print most probable words
     Njr = blog.counts[4]
@@ -35,17 +35,19 @@ def analyze(result):
     for e, irow, phi_irow in zip(models.SENTIMENTS, idxs, phi_idxs):
         print e, [ blog.lexicon.words[i] for i in phi_irow[::-1][:30] ]
 
-    print "Sentiment distribution over words"
-    for i, e in enumerate(models.SENTIMENTS):
-        plt.plot(phi[i,:])
-        plt.show()
+    if graphs:
+        import matplotlib.pyplot as plt
+        print "Sentiment distribution over words"
+        for i, e in enumerate(models.SENTIMENTS):
+            plt.plot(phi[i,:])
+            plt.show()
 
-    plt.hist(blog.subj_assign, len(models.SUBJECTIVITIES))
-    plt.show()
-    plt.hist(blog.sent_assign, len(models.SENTIMENTS))
-    plt.show()
+        plt.hist(blog.subj_assign, len(models.SUBJECTIVITIES))
+        plt.show()
+        plt.hist(blog.sent_assign, len(models.SENTIMENTS))
+        plt.show()
 
 if __name__ == "__main__":
     args = parser.parse_args()
-    sys.exit(main(args.blogdir, args.o))
+    sys.exit(main(args.blogdir, args.o, args.g))
 
