@@ -1,5 +1,6 @@
 \documentclass{article}
 \usepackage{nips10submit_e,times}
+\usepackage{algpseudocode}
 %\documentstyle[nips07submit_09,times]{article}
 \usepackage[square,numbers]{natbib}
 \usepackage{amsmath, epsfig}
@@ -17,7 +18,7 @@
 \newcommand{\comment}[1]{}
 \DeclareMathOperator*{\argmax}{arg\,max}
 
-\title{Supervised and Unsupervised Approaches to Multimodal Sentiment Classification}
+\title{Semi-Supervised Multimodal Emotion Classification}
 
 \author{
 Kui Tang\\
@@ -37,7 +38,6 @@ Columbia University, New York, NY 10027, USA\\
 \newcommand{\new}{\marginpar{NEW}}
 \newcommand{\X}{\mathcal{X}}
 
-
 \nipsfinalcopy
 
 \begin{document}
@@ -45,34 +45,163 @@ Columbia University, New York, NY 10027, USA\\
 \maketitle
 
 \begin{abstract}
-Abstract
+Modelling emotional data is a relatively immature field. Most
+approaches focuses on \emph{sentiment analysis}, a binary (negative
+or positive) classification of emotion. Moreover, most applications
+only care about aggregating of global sentiment, ignoring sentiments
+of individual users.  Applications in human-computer interaction
+and recommendation systems for web applications can benefit from
+the machine's knowledge of the particular user's emotional state.
+However, high quality mutimodal labelled corpora are difficult to
+find. In this project, we derive a personal emotional lexicon from
+Tumblr blogs, data sources rich in emotional content. We take a
+semi-supervised approach with latent Dirichlet allocation (LDA) and
+a derivative, SubjLDA, initializing our model with labelled emotional
+words with a small non-domain-specific lexicon and allowing the
+model to classify the remaining words and documents into emotional
+categories.
 \end{abstract}
 
 \section{Introduction}
+\begin{quote}
+It is obvious, that when we have the prospect of pain or pleasure
+from any object, we feel a consequent emotion of aversion or
+propensity, and are carryed to avoid or embrace what will give us
+this uneasines or satisfaction. \ldots Here then reasoning takes
+place to discover this relation; and according as our reasoning
+varies, our actions receive a subsequent variation. But it is evident
+in this case that the impulse arises not from reason, but is only
+directed by it.
+
+\hspace{9 cm} --- Hume \citep{hume}
+\end{quote}
+As a person is ultimately driven to action based on emotion, 
+
 \label{sec:introduction}
 
+\subsection{Related Work}
 \citep{lin03}
 \subsection{Problem Description}
 
-\subsection{Background}
+\section{Priors}
 
-\section{Methods}
+\section{Models}
+\subsection{Latent Dirichlet Allocation}
+Latent Dirichlet allocation models each document (here, a blog post)
+as a multinomial distribution over a small set of latent topics
+(here, the six emotions, plus a neutral emotion). We implement the
+standard collapsed Gibbs sampler.
 
-\subsection{Formal Model}
+\subsection{SubjLDA}
+SubjLDA is a model by Lin~\citep{lin03} which adds a sentence-level
+subjectivity latent variable. Each sentence is either objective or
+subjective. Conditioned on subjectivity, a sentiment label is drawn
+for each word in that sentence. Since a single document can shift
+emotions, the sentence-level hierarchy allows this model to better
+capture local sentiment. The generative procedure for SubjLDA follows:
+
+\begin{enumerate}
+\item For each sentiment label $l$:
+\begin{enumerate}
+\item Draw $\mathbf{\phi}_l ~ \mbox{Dir}(\mathbf{\lambda}_l \cdot \mathbf{\beta}_l)$, a multinomial distribution over words for the sentiment label $l$.
+\end{enumerate}
+\item For each document $d$:
+\begin{enumerate}
+\item Draw $\mathbf{pi}_d ~ \mbox{Dir}(\gamma)$, a multinomial distribution over subjectivity labels for each sentence in document $d$.
+\item For each sentence $j$:
+\begin{enumerate}
+\item Draw a subjectivity label $s_{d,j} ~ \mbox{Multinomial}(\mathbf{pi}_d)$
+\item Draw a $\mathbf{theta}_{d,m} ~ \mbox{Dir}(\mathbf{\alpha_{s_{d,m}}})$, a distribution of sentiments for sentence $j$ of document $d$.
+\item For each $N_{d,m}$ word position in sentence $m$ of document $d$
+\begin{enumerate}
+\item Draw a sentiment $l_{d,m,t} ~ \mbox{Mult}(\mathbf{\theta}_{s_{d,m}})$
+\item Draw a word $w_{d,m,t} ~ \mbox{Mult}(\mathbf{\phi}_{l_{d,m,t}})$
+\end{enumerate}
+\end{enumerate}
+\end{enumerate}
+\end{enumerate}
+
+For details, see~\citep{lin03}.
+
+Each $\mathbf{\alpha}$ encodes an asymmetric Dirichlet prior on the
+distributions of sentiments given a subjectivity. In our inference,
+we initialize our labels with a training corpus, and estimate
+$\mathbf{\alpha}$ via maximum likelihood from these labels
+\citep{minka00}. Each $\mathbf{\beta}$ is scaled to the empirical
+frequency of training words for each sentiment. Thus, our priors
+capture the asymmetry of sentiment: that obejctive and subjective
+sentences are not equally prevalent, that most words are neutral,
+and that words may nobe be distributed uniformly across emotions.
+Further details on these priors below.
+
 \subsection{Priors}
 
+\section{Data}
+Data were scraped from Tumblr~\citep{tumblr} in April 2012. For
+these results, we analyzed three blogs, consisting mainly of personal
+writings in politics, prose, and poetry. All posts were by the same
+user---a critical feature of our modelling approach.
+
+To limit ourselves to ``important'' posts, we dropped all posts
+with fewer than 20 words. We randomly chose 20\% to hold as a test
+set to evaluate our model's performance
+
+
 \section{Experiments}
+A simple single-core Python implementation of Gibbs sampling for SubjLDA processed on average 2,715.8 words per second, which comes to 26.0 seconds per iteration for the poetry blog of 1036 posts. Since the Gibbs sampler must run for hundreds of iterations before convergence, more efficient approaches, such as variational inference~\citep{winn2005} should be considered for large-scale web applications.
 
-\subsection{Data Source \& Simulation}
+\section{Results}
 
+PUT TABLES OF INFERRED RESULTS
 
-\subsection{Testing Method}
+PUT HISTOGRAMS OF TOPICS FOR ONE RUN
 
+PUT A LOG LIKELIHOOD OF SOMETHING.
 
-\section{Expected Conclusions \& Results}
+\subsection{Evaluation}
+Lin did not derive a conditional distribution for the likelihood of SubjLDA, so we derive it here.
+
+We evalute the perplexity of the test set \citep{blei03}:
+\begin{equation}
+perp(D_{test}) = \exp{-\frac{\sum_{d=1}^M \log{p(\mathbf{w}_d)}}{\sum_{d=1}^N N_d}}
+\end{equation}
+where $\mathbf{w}_d$ denotes the bag-of-words representation for
+document $d$. We both models, we compare against a baseline model
+based on our knowledge from Wordnet-Affect and SentiWordNet. If we
+denote by $N_k$ as the count of unique words in our corpus with
+label $k$ and $N$ as the total number of words in the corpus, then
+the probability of observing any word is
+\begin{equation}
+p(w) = \begin{cases} 1 / \left( {C_{\mathcal{E}(w)}} \right) & \mbox{if } w \mbox{ is labelled} \\
+                     1/ N \mbox{ otherwise }
+       \end{cases}
+\end{equation}
+where $\mathcal{E}(w)$ denotes the emotion of word $w$ (where the
+default emotion is neutral), if we have a prior label on $w$.
+
+PUT TABLE HERE.
+
+\section{Post-Mortem}
+While the results for this project were not quite as I had hoped,
+I've certainly learned a lot from doing this work.
+
+First, as described in the abstract, \emph{immature} really does
+capture the state of the art in web sentiment analysis. This is partially
+due to the nature of sentiment data: all emotions are hidden variables
+because nobody can read your mind. So any observations, textual,
+verbal, or physiological are necessarily noise. Words are especially
+ambiguous at communicating emotion, though they are the most easily
+accessible data. Nevertheless, good classifications results for
+large supervised problems have been achieved, a large number of which
+use SVMs. Sufficient data does indeed overwhelm noise, and does not
+require much clever trickery to tease out the relationships within the
+data. This was a lesson often reiterated during class which I am
+learning by omission. But conversely, if your data is too sparse,
+then no amount of nonlinear Bayesian trickery may be able to save you.
 
 \begin{small}
 \bibliographystyle{plainnat}
 \bibliography{refs} 
 \end{small}
 \end{document}
+

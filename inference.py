@@ -182,9 +182,9 @@ def train_subjlda(blog, iters=400, beta=None, gamma=None):
     # TUNE PRIORS HERE!
     if beta is None: # Asymmetric
         # Favor neutral about 10x more
-        beta = np.zeros((S, V))
-        beta[0,:] = 0.01
-        beta[1:,:] = 0.001
+        beta = np.ones((S, V)) * 0.01
+        beta *= blog.lam
+
     if gamma is None: # Symmetric
 #        # Made this TINY
         L = blog.avg_len()

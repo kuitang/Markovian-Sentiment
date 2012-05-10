@@ -38,7 +38,7 @@ def sent_transform(sent):
     # Get rid of empty words
     return filter(None, no_stopwords)
 
-def get_sentences(text, min_words=20):
+def get_sentences(text, min_words=10):
     ascii = unidecode(text)
     sentences = filter(None, map(sent_transform, sent_tokenize(ascii)))
     wc = sum(len(s) for s in sentences)
@@ -204,6 +204,13 @@ class Blog(object):
         self.doc_counts   = np.zeros((D, K))
         self.topic_N      = np.zeros(K)
         self.doc_N        = np.zeros(D)
+
+        # Initialize the ASYMMETRIC PRIOR!!!
+        # Ratio of 0 : 1 is 1 : 10
+        self.lam = np.ones((S, V)) * 0.1
+        for w, i in self.lexicon.worddict.iteritems():
+            k = sentiments.get(w, 0)
+            self.lam[k, i] = 1
         
         sent_hits, sent_nonneut_hits, subj_hits, misses = 0, 0, 0, 0
         i = 0

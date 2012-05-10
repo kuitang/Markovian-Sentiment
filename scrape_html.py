@@ -49,23 +49,22 @@ def make_dataset(blogdir):
     
 #    blog.vectorize()
     # Save it
-    print "Saving preprocessing..."
-    cPickle.dump(open(os.path('data', os.path.basename(blogdir) + '.cache'), 'w'))
     return blog
 
 if __name__ == "__main__":
     print "Main longer implemented."
-#    args = parser.parse_args()
-#    newdir = os.path.join('data', 'blogs')
-#    # Load the models files
-#    load()
-#    if not os.path.exists(newdir): os.mkdir(newdir)
-#
-#    for dir in args.blogdir:
-#        print "Reading %s"%dir
-#        docs = make_dataset(dir)
-#        name = os.path.basename(dir)
-#        print "Writing %s"%name
-#        with open(os.path.join(newdir, name), 'w') as f:
-#            cPickle.dump(docs, f, -1)
-#
+    args = parser.parse_args()
+    newdir = os.path.join('data', 'blogs')
+    # Load the models files
+    load()
+    if not os.path.exists(newdir): os.mkdir(newdir)
+
+    for dir in args.blogdir:
+        dir = dir.rstrip('/')
+        print "Reading %s"%dir
+        docs = make_dataset(dir)
+        name = os.path.basename(dir)
+        print "Writing %s"%name
+        with open(os.path.join(newdir, name), 'w') as f:
+            cPickle.dump(docs, f, -1)
+
