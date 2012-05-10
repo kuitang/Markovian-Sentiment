@@ -92,6 +92,87 @@ def update_alpha(alpha, theta, sentence_subj, reset_alpha=False, stepsize=.1, to
     assert(np.all(alpha > 0))
     return alpha
 
+def update_one_alpha(alpha, theta, stepsize=.1, tol=1e-14):
+# Newton method in [Minka00]
+# NOTE: Need a small stepsize to prevent negative valued alpha
+# (I haven't thought about why yet... isn't the log likelihood convex?)
+    D, K = np.shape(theta)
+
+    log_p = 1.0 / D * np.sum(np.log(theta), 1)
+    while True:
+        oldnorm = np.linalg.norm(alpha)
+        g = D*psi(np.sum(alpha)) - D*psi(alpha) + D*log_p
+        print log_p.shape
+        # Diagonal
+        q = -D * polygamma(1, alpha)
+        z = D * polygamma(1, np.sum(alpha))
+        b = np.sum(g / q) / (1.0 / z + np.sum(1.0 / q))
+
+        print "%s - %s"%(alpha, stepsize * (g - b) / q)
+        alpha -= stepsize * (g - b) / q
+
+        if abs(np.linalg.norm(alpha) - oldnorm) < tol:
+            break
+
+    assert(np.all(alpha > 0))
+    return alpha
+
+def train_lda(blog, iters=400, gamma=None):
+    D = len(blog.docs)
+    W = len(blog.lexicon)
+
+    # sample of proportions
+    theta = blog.doc_counts.transpose() / blog.doc_N
+    alpha = np.ones(S)
+    alpha = update_one_alpha(alpha, theta, blog.doc_counts)
+
+    print "alpha:", alpha
+
+    if gamma is None: # Set it symmetric for now--data should override.
+        gamma = 0.001 # standard value
+        print "gamma was set to %g"%gamma
+
+    # Translated from MATLAB for 4240 Homework #5
+    print type(iters)
+    print "Distribution:", np.histogram(blog.topic_assign, bins=range(8))
+    for iter in xrange(iters):
+        start = time.time()
+        perm = np.random.permutation(blog.n_words)
+        blog.words = blog.words[perm]
+        blog.doc_belong = blog.doc_belong[perm]
+        blog.topic_assign = blog.topic_assign[perm]
+
+        for d in xrange(len(blog.docs)):
+            w_d_idxs = blog.doc_belong == d
+            w_d = np.flatnonzero(w_d_idxs)
+
+            for i in w_d:
+                ti = blog.topic_assign[i]
+                wi = blog.words[i]
+
+                # Subtract contribution from word i
+                blog.topic_counts[ti, wi] -= 1
+                blog.topic_N[ti] -= 1
+                blog.doc_counts[d, ti] -= 1
+
+                # Compute the probability vector
+                t1 = alpha + blog.doc_counts[d,:].transpose()
+                t2_top = gamma + blog.topic_counts[:,wi]
+                t2_bot = W * gamma + blog.topic_N
+                pdf = t1 * t2_top / t2_bot
+                # Remove negative probabilities
+#                pdf[pdf < 0] = 0
+                z = discrete_sample(pdf)
+
+                blog.topic_assign[i] = z
+
+                blog.topic_counts[z, wi] += 1
+                blog.doc_counts[d, z] += 1
+                blog.topic_N[z] += 1
+
+        print "Iteration %d: %g seconds"%(iter, time.time() - start)
+        print "Distribution:", np.histogram(blog.topic_assign, bins=range(8))
+
 #@profile
 def train_subjlda(blog, iters=400, beta=None, gamma=None):
     D = len(blog.docs)
