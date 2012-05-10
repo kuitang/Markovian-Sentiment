@@ -1,5 +1,6 @@
 from collections import Counter
 from pprint import pprint
+from itertools import chain
 import cPickle
 import array, string, itertools, os, csv
 import numpy as np
@@ -47,23 +48,40 @@ def get_sentences(text, min_words=20):
         return sentences
 
 underscore_tr = string.maketrans('_', ' ')
-SENTIMENTS = ( 'neutral', 'anger', 'disgust', 'fear', 'joy', 'sadness', 'surprise' )
+#SENTIMENTS = ( 'neutral', 'anger', 'disgust', 'fear', 'joy', 'sadness', 'surprise' )
+#sentiments = None
+#def load_wordnetaffect_lite(dirpath=os.path.join('data', 'wordnetaffectlite')):
+#    global sentiments
+#    cache_path = os.path.join('data', 'sentiments.cache')
+#    if os.path.exists(cache_path):
+#        sentiments = cPickle.load(open(cache_path))
+#    else:
+#        sentiments = dict()
+#        for i, e in enumerate(SENTIMENTS[1:]):
+#            with open(os.path.join(dirpath, e+'.txt')) as f:
+#                for r in csv.reader(f, delimiter=' '):
+#                    # the first column is junk; add the rest
+#                    # treat bigrams as two unigrams
+#                    for gram in r[1:]:
+#                        words = gram.split('_')
+#                        sentiments.update((word_transform(w), i + 1) for w in words)
+#        cPickle.dump(sentiments, open(cache_path, 'w'))
+#
+SENTIMENTS = ( 'neutral', 'positive', 'negative' )
 sentiments = None
-def load_wordnetaffect_lite(dirpath=os.path.join('data', 'wordnetaffectlite')):
+
+SUBJCLUE_COLS = ( 0, 2, -1 ) # type, word, pole
+def load_subjclue(path=os.path.join('data', 'subjclueslen1-HLTEMNLP05.tff')): 
     global sentiments
     cache_path = os.path.join('data', 'sentiments.cache')
     if os.path.exists(cache_path):
         sentiments = cPickle.load(open(cache_path))
     else:
         sentiments = dict()
-        for i, e in enumerate(SENTIMENTS[1:]):
-            with open(os.path.join(dirpath, e+'.txt')) as f:
-                for r in csv.reader(f, delimiter=' '):
-                    # the first column is junk; add the rest
-                    # treat bigrams as two unigrams
-                    for gram in r[1:]:
-                        words = gram.split('_')
-                        sentiments.update((word_transform(w), i + 1) for w in words)
+        for r in csv.reader(open(path), delimiter=' '):
+            cols = [ r[c].split('=')[1] for c in SUBJCLUE_COLS ]
+            if cols[0] == 'strongsubj':
+                sentiments[word_transform(cols[1])] = 1 if cols[2] == 'positive' else 2
         cPickle.dump(sentiments, open(cache_path, 'w'))
 
 SUBJECTIVITIES = ( 'objective', 'subjective' )
@@ -106,7 +124,8 @@ def load():
     if not load.loaded:
         load.loaded = True
         load_sentiwordnet()
-        load_wordnetaffect_lite()
+        load_subjclue()
+#        load_wordnetaffect_lite()
 #    print subjectivities.keys()
 #    print sentiments.keys()
 load.loaded = False
@@ -142,23 +161,86 @@ class Lexicon(object):
 class Blog(object):
     def __init__(self, min_words_per_post=20):
         self.docs = []
+        self.test_docs = []
         self.lexicon = Lexicon()
         self.min_words_per_post = min_words_per_post
         self.reject = 0
 
     # This should be the only function to see raw text.
-    def add_doc(self, text):
+    def add_doc(self, text, test_prop=0.2):
         sentences = get_sentences(text, self.min_words_per_post) 
         if sentences:
-            self.docs.append(sentences)
             self.lexicon.update(w for s in sentences for w in s)
+            if np.random.binomial(1, test_prop): # test set instead
+                self.test_docs.append(sentences)
+            else:
+                self.docs.append(sentences)
         else:
             self.reject += 1
 
     def avg_len(self):
         return sum(len(d) for d in self.docs) / float(len(self.docs))
 
-    def vectorize(self):
+    def vectorize_test_set(self):
+        pass
+
+    def vectorize_lda_doc(self, p_subjective=.1):
+        """
+        Prepare bag of words for normal LDA in document mode
+        """
+        print "Blog.freeze: %d posts added, %d rejected."%(
+                len(self.docs), self.reject)
+        self.lexicon.freeze()
+        self.n_words = sum(len(s) for d in self.docs for s in d)
+        print self.n_words
+        self.words = np.empty(self.n_words)
+        self.doc_belong = np.empty_like(self.words)
+        self.topic_assign = np.empty_like(self.words)
+
+        # Count variables
+        K, D, V = len(SENTIMENTS), len(self.docs), self.n_words
+        self.topic_counts = np.zeros((K, V))
+        self.doc_counts   = np.zeros((D, K))
+        self.topic_N      = np.zeros(K)
+        self.doc_N        = np.zeros(D)
+        
+        sent_hits, sent_nonneut_hits, subj_hits, misses = 0, 0, 0, 0
+        i = 0
+        for id, doc in enumerate(self.docs):
+            # Ignore sentences
+            for w in chain.from_iterable(doc):
+                self.words[i] = self.lexicon[w]
+                self.doc_belong[i] = id
+                k = None
+                if w in sentiments:
+                    sent_hits += 1
+                    k = sentiments[w]
+                    if k != 0: # nonneut
+                        sent_nonneut_hits += 1
+                        print "#%d: %s was %d"%(i, w, k)
+                elif subjectivities.get(w, -1) == 0:  # neut
+                    subj_hits += 1
+                    k = 0
+                else: # no prior knowledge:
+                    misses += 1
+                    if np.random.binomial(1, p_subjective): # give it subjective
+                        k = np.random.randint(1, K)
+                    else: # or not
+                        k = 0
+
+                self.topic_assign[i] = k
+
+                self.topic_N[k] += 1
+                self.topic_counts[k, self.words[i]] += 1
+                self.doc_N[id] += 1
+                self.doc_counts[id, k] += 1
+
+                i += 1
+
+        print "Initialization: sentiment hits = %d (of which %d non-neutral), subjectivity hits = %d, misses = %d"%(sent_hits, sent_nonneut_hits, subj_hits, misses)
+        print "Distribution:", np.histogram(self.topic_assign, bins=range(8))
+
+    def vectorize(self, p_subjective=0.2):
         """
         Prepare bag of sentences/words.
         """
@@ -223,7 +305,6 @@ class Blog(object):
                         # Prior-prior knowledge is uniform... could potentially improve
                         # Should really randomly assign these proportionally, in
                         # accordance with *some* prior
-                        sent_subj = np.random.randint(2) 
                         # for some reason this makes seeking alpha diverge...
                         # I know why: you introduce some "singularity" into alpha,
                         # because then ALL objective words are neutral, which is

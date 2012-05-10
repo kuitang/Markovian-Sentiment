@@ -1,6 +1,9 @@
 ./secrets.py
 data/*
 
+*.dat
+*.lprof
+
 # Python
 *.pyc
 *.prof

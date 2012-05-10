@@ -47,21 +47,22 @@ def make_dataset(blogdir):
         for post_dom in posts:
             blog.add_doc(text_from_post(post_dom))
     
-    blog.vectorize()
+#    blog.vectorize()
     return blog
 
 if __name__ == "__main__":
-    args = parser.parse_args()
-    newdir = os.path.join('data', 'blogs')
-    # Load the models files
-    load()
-    if not os.path.exists(newdir): os.mkdir(newdir)
-
-    for dir in args.blogdir:
-        print "Reading %s"%dir
-        docs = make_dataset(dir)
-        name = os.path.basename(dir)
-        print "Writing %s"%name
-        with open(os.path.join(newdir, name), 'w') as f:
-            cPickle.dump(docs, f, -1)
-
+    print "Main longer implemented."
+#    args = parser.parse_args()
+#    newdir = os.path.join('data', 'blogs')
+#    # Load the models files
+#    load()
+#    if not os.path.exists(newdir): os.mkdir(newdir)
+#
+#    for dir in args.blogdir:
+#        print "Reading %s"%dir
+#        docs = make_dataset(dir)
+#        name = os.path.basename(dir)
+#        print "Writing %s"%name
+#        with open(os.path.join(newdir, name), 'w') as f:
+#            cPickle.dump(docs, f, -1)
+#
