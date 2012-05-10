@@ -48,6 +48,9 @@ def make_dataset(blogdir):
             blog.add_doc(text_from_post(post_dom))
     
 #    blog.vectorize()
+    # Save it
+    print "Saving preprocessing..."
+    cPickle.dump(open(os.path('data', os.path.basename(blogdir) + '.cache'), 'w'))
     return blog
 
 if __name__ == "__main__":

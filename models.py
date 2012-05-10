@@ -48,28 +48,29 @@ def get_sentences(text, min_words=20):
         return sentences
 
 underscore_tr = string.maketrans('_', ' ')
-#SENTIMENTS = ( 'neutral', 'anger', 'disgust', 'fear', 'joy', 'sadness', 'surprise' )
-#sentiments = None
-#def load_wordnetaffect_lite(dirpath=os.path.join('data', 'wordnetaffectlite')):
-#    global sentiments
-#    cache_path = os.path.join('data', 'sentiments.cache')
-#    if os.path.exists(cache_path):
-#        sentiments = cPickle.load(open(cache_path))
-#    else:
-#        sentiments = dict()
-#        for i, e in enumerate(SENTIMENTS[1:]):
-#            with open(os.path.join(dirpath, e+'.txt')) as f:
-#                for r in csv.reader(f, delimiter=' '):
-#                    # the first column is junk; add the rest
-#                    # treat bigrams as two unigrams
-#                    for gram in r[1:]:
-#                        words = gram.split('_')
-#                        sentiments.update((word_transform(w), i + 1) for w in words)
-#        cPickle.dump(sentiments, open(cache_path, 'w'))
-#
-SENTIMENTS = ( 'neutral', 'positive', 'negative' )
+SENTIMENTS = ( 'neutral', 'anger', 'disgust', 'fear', 'joy', 'sadness', 'surprise' )
 sentiments = None
+def load_wordnetaffect_lite(dirpath=os.path.join('data', 'wordnetaffectlite')):
+    global sentiments
+    cache_path = os.path.join('data', 'sentiments.cache')
+    if os.path.exists(cache_path):
+        sentiments = cPickle.load(open(cache_path))
+    else:
+        sentiments = dict()
+        for i, e in enumerate(SENTIMENTS[1:]):
+            with open(os.path.join(dirpath, e+'.txt')) as f:
+                for r in csv.reader(f, delimiter=' '):
+                    # the first column is junk; add the rest
+                    # treat bigrams as two unigrams
+                    for gram in r[1:]:
+                        words = gram.split('_')
+                        sentiments.update((word_transform(w), i + 1) for w in words)
+        cPickle.dump(sentiments, open(cache_path, 'w'))
 
+#SENTIMENTS = ( 'neutral', 'positive', 'negative' )
+#SENTIMENTS = ( 'neutral', 'positive', 'negative' )
+#sentiments = None
+#
 SUBJCLUE_COLS = ( 0, 2, -1 ) # type, word, pole
 def load_subjclue(path=os.path.join('data', 'subjclueslen1-HLTEMNLP05.tff')): 
     global sentiments
@@ -124,8 +125,8 @@ def load():
     if not load.loaded:
         load.loaded = True
         load_sentiwordnet()
-        load_subjclue()
-#        load_wordnetaffect_lite()
+#        load_subjclue()
+        load_wordnetaffect_lite()
 #    print subjectivities.keys()
 #    print sentiments.keys()
 load.loaded = False
