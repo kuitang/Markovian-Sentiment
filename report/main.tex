@@ -17,7 +17,7 @@
 \newcommand{\comment}[1]{}
 \DeclareMathOperator*{\argmax}{arg\,max}
 
-\title{Semi-Supervised Multimodal Emotion Classification}
+\title{Semi-Supervised Multidimensional Personal Emotion Classification}
 
 \author{
 Kui Tang\\
@@ -79,76 +79,166 @@ As a person is ultimately driven to action based on emotion,
 \label{sec:introduction}
 
 \subsection{Related Work}
-\citep{lin03}
-\subsection{Problem Description}
-Given a set of blog posts, can we infer a probability model of the 
+The explosion of social media---particularly (micro)blogs, product
+reviews, and recommendations---drives both demand and opportunity
+for mining sentiments from text. Early work by Turney in 2002
+\citep{turney02} uses an unsupervised method of computing \emph{pointwise
+mutual information} between words in product reviews with the seed
+words ``excellent'' and ``poor''. Indeed, most work, including the
+model on which this project is based \citep{lin03}, models emotion
+as a one-dimensional continuum between positive and negative.
+
+We thus move to multidimensional emotional analysis. Rather than
+start with merely two mood states, multidimensional analyses begin
+with lists of seed words for each emotional dimension of interest.
+The earliest standard lexicon is the the art is the \emph{Profile
+of Mood states} \citep{mcnair71}, a psychological survey that
+includes 65 items labelled across six distinct states. Bollen et
+al. extend this list to a lexicon of 964 terms by adding co-related
+words appearing in Google's n-gram data and use this data to regress
+DJIA closing prices against a time series of aggregate inferred
+Twitter sentiment \citep{bollen11}. They find more significant
+Granger-causality p-values in a lag of 2--6 days when incorporating
+a multidimensional lexicon compared to significance only in one-day
+lags on a unidimensional lexicon. The WordNet-Affect project begins
+with a seed list of manually curated terms, and then iteratively
+finds synsets with WordNet to expand the list \citep{strapparava04}.
+In this project we use WordNet-Affect data as our priors.
+
+Texts do not generally come with explicit emotional tags, so
+supervised techniques have limited scope. One notable exception is
+Livejournal, which allows users to specify one of 142 distinct moods
+when composing a blog post. Mishne et. al \citep{mishne06} use these
+labels to build a linear regression model, predicting mood
+\emph{levels}---the sum of mood tags at a given hour---from total
+post intensity, hour of the day, and frequencies of individual
+terms. Sood and Vasserman use k-means to compactify the set of 142
+mood descriptors into just 3 (happy, sad, angry) and apply Naive Bayes
+with the new labels.
+
+Finally, \emph{supervised LDA} models document classification onto
+predefined labels as a regression problem with a categorical response.
+Blei et al. show an improvement in per-word likelihood on movie reviews
+and Digg data compared to LDA.~\citep{blei07}.
+
+\section{Problem Description}
+The above work handles on \emph{aggregate} sentiment analysis, which
+is great for marketing and stock trading, but less applicable to
+\emph{affective computing}. Rosalind argues that because emotions
+are essential to human reasoning, learning, and pattern recognition,
+if we wish to develop more natural, human-like behavior in machines,
+we must equip machines with emotional intelligence~\citep{picard97}.
+A basic problem which we confront in this project is to learn a
+user's emotional state from text. Only with knowledge of how a user
+feels can machines produce emotionally intelligent responses.
+
+Given a set of blog posts from one user, we wish to infer a
+personalized, probabilistic lexicon of emotion. Certain words such
+as `love' and `fear' clearly signifiy a particular emotion.  However,
+manually curated lexica are sparse, and each person uses language
+in a slightly different way and carries unique connotations. A
+medical student write about her work experiences at the hospital,
+thereby associating the word `hospital' with aspiration and career
+success. But most people associate hospitals with fear and uncertainty.
+Thus, in a similar situation as speech recognition, applications
+that attempt to infer the user's emotional state should improve
+their performance when trained user-specific data.
+
+In this project, we start with a small, hand-labelled lexicon of
+emotional words as a baseline. We compare this baseline against two
+topic models adapted for emotional classification to show a performance
+increase after training on user-specific texts.
 
 \section{Models}
 \subsection{Latent Dirichlet Allocation}
-Latent Dirichlet allocation models each document (here, a blog post)
-as a multinomial distribution over a small set of latent topics
-(here, the six emotions, plus a neutral emotion). We implement the
+Latent Dirichlet allocation~\citep{blei03} models each document $d$
+(here, a blog post) as a multinomial distribution $\theta_d$ over
+a sparse subset of latent topics $Z$.  Each index $i$ in a document
+is drawn from this multinomial topic distribution, giving each word
+a topic label $z_i^d$. Conditioned on this topic label, a word
+$w_i^d$ is drawn from a multinomial distribution $\beta_{z_i^d}$.
+Here, we fix the number of topics to 7 to include the six emotions
+in our prior lexicon plus a neutral emotion. We implement the
 standard collapsed Gibbs sampler.
 
-\subsection{SubjLDA}
+\subsection{SubjLDA} \label{sec:subjlda}
 SubjLDA is a model by Lin~\citep{lin03} which adds a sentence-level
 subjectivity latent variable. Each sentence is either objective or
 subjective. Conditioned on subjectivity, a sentiment label is drawn
 for each word in that sentence. Since a single document can shift
 emotions, the sentence-level hierarchy allows this model to better
-capture local sentiment. The generative procedure for SubjLDA follows:
+capture local sentiment. The generative procedure for SubjLDA
+follows:
 
 \begin{enumerate}
 \item For each sentiment label $l$:
 \begin{enumerate}
-\item Draw $\mathbf{\phi}_l ~ \mbox{Dir}(\mathbf{\lambda}_l \cdot \mathbf{\beta}_l)$, a multinomial distribution over words for the sentiment label $l$.
+\item Draw $\mathbf{\phi}_l \sim \mbox{Dir}(\mathbf{\lambda}_l \cdot \mathbf{\beta}_l)$, a multinomial distribution over words for the sentiment label $l$.
 \end{enumerate}
 \item For each document $d$:
 \begin{enumerate}
-\item Draw $\mathbf{pi}_d ~ \mbox{Dir}(\gamma)$, a multinomial distribution over subjectivity labels for each sentence in document $d$.
+\item Draw $\mathbf{\pi}_d \sim \mbox{Dir}(\gamma)$, a multinomial distribution over subjectivity labels for each sentence in document $d$.
 \item For each sentence $j$:
 \begin{enumerate}
-\item Draw a subjectivity label $s_{d,j} ~ \mbox{Multinomial}(\mathbf{pi}_d)$
-\item Draw a $\mathbf{\theta}_{d,m} ~ \mbox{Dir}(\mathbf{\alpha_{s_{d,m}}})$, a distribution of sentiments for sentence $j$ of document $d$.
+\item Draw a subjectivity label $s_{d,j} \sim \mbox{Multinomial}(\mathbf{\pi}_d)$
+\item Draw a $\mathbf{\theta}_{d,m} \sim \mbox{Dir}(\mathbf{\alpha_{s_{d,m}}})$, a distribution of sentiments for sentence $j$ of document $d$. 
 \item For each $N_{d,m}$ word position in sentence $m$ of document $d$
 \begin{enumerate}
-\item Draw a sentiment $l_{d,m,t} ~ \mbox{Mult}(\mathbf{\theta}_{s_{d,m}})$
-\item Draw a word $w_{d,m,t} ~ \mbox{Mult}(\mathbf{\phi}_{l_{d,m,t}})$
+\item Draw a sentiment $l_{d,m,t} \sim \mbox{Mult}(\mathbf{\theta}_{s_{d,m}})$
+\item Draw a word $w_{d,m,t} \sim \mbox{Mult}(\mathbf{\phi}_{l_{d,m,t}})$
 \end{enumerate}
 \end{enumerate}
 \end{enumerate}
 \end{enumerate}
-
-For details, see~\citep{lin03}.
 
 Each $\mathbf{\alpha}$ encodes an asymmetric Dirichlet prior on the
 distributions of sentiments given a subjectivity. In our inference,
-we initialize our labels with a training corpus, and estimate
-$\mathbf{\alpha}$ via maximum likelihood from these labels
-\citep{minka00}. Each $\mathbf{\beta}$ is scaled to the empirical
-frequency of training words for each sentiment. Thus, our priors
-capture the asymmetry of sentiment: that obejctive and subjective
+we initialize our labels with a training corpus, and use a
+maximum-likelihood estimate for $\mathbf{\alpha}$, computed using
+a Newton-Raphson iteration from the initializing sentiment and
+subjectivity labels~\citep{minka00}. Each $\mathbf{\beta}$ is
+scaled to the empirical frequency of training words for each
+sentiment. The prior $\gamma$ controls the mixing coefficients of
+subjectivity labels (subjective or objective). Thus, our priors
+capture the asymmetry of sentiment: that objective and subjective
 sentences are not equally prevalent, that most words are neutral,
 and that words may nobe be distributed uniformly across emotions.
 Further details on these priors below.
 
+Let $\mathbf{w}$ denote a bag-of-words vector of words, $\mathbf{s}$
+denote a vector of subjectivity labels, and $\mathbf{l}$ denote a vector
+of sentiment labels. Then the joint distribution is
+\begin{align}
+P(\mathbf{w,s,l}|\mathbf{\alpha,\beta,\gamma}) &= P(\mathbf{w}|\mathbf{l,\beta})P(\mathbf{l}|\mathbf{s,\alpha})P(\mathbf{s}|\mathbf{\gamma}) \\
+    &= \int P(\mathbf{w}|\mathbf{l,\beta})P(\mathbf{l}|\mathbf{\beta}) d\Phi \int P(\mathbf{l}|\mathbf{\Theta})P(\mathbf{\Theta}|\mathbf{s,\alpha})d\Theta \int P(\mathbf{s}|\mathbf{\Pi})P(\mathbf{\Pi}|\mathbf{\gamma}) d\mathbf{\Pi}
+\end{align}
+
+We can analytically integrate out the parameters to get conditional
+distributions for each sentiment and subjectivity label and thus
+builds a Gibbs sampler. For details, see~\citep{lin03}.
+
 \subsection{Priors}
 We follow Lin's approach to make this model semi-supervised by
-initializing the latent variables and model priors based on
-existing corpora. We use WordNet-Affect 1.0 \citep{strapparava04},
-which provides 606 words labelled with one of ``anger'', ``disgust'',
-``fear'', ``joy'', ``sadness'', ``surprise''. We also used the
-neutral words from SentiWordNet~\citep{baccianella10}, the same
-as Lin.
+initializing the latent variables and model priors based on existing
+corpora. We use the words under the {\sc emotion} label in WordNet-Affect
+1.0 \citep{strapparava04}, which provides 606 words labelled with
+one of ``anger'', ``disgust'', ``fear'', ``joy'', ``sadness'',
+``surprise''. We also used the neutral words from
+SentiWordNet~\citep{baccianella10}, the same source as Lin.
 
-The majority of words were neutral. Of 286,997 words in the 
-poetry blog, 240,087, or 83.6\%, were discovered to be neutral.
+For each word in the training set, if we found that word in either
+prior lexicon, we set the appropriate sentiment label. If a sentence
+contained any non-neutral words, we labelled that sentence subjective.
+Otherwise, we labelled the sentence objective.
 
 If a word was not matched by emotion or neutrality (rare; less than
 10\%) of the time, we randomly assigned it an emotion.
 
+The majority of words were neutral. Of 286,997 words in the 
+poetry blog, 240,087, or 83.6\%, were discovered to be neutral.
+
 \section{Data}
-Data were scraped from Tumblr~\citep{tumblr} in April 2012. The API
+Data were scraped from Tumblr in April 2012. The API
 was not usable because it only allowed access to users who have
 authenticated the API key for this application. However, as this
 model works on only a single user's blog, applications could work
@@ -161,11 +251,11 @@ performed with lxml.
 
 For these results, we analyzed three blogs, consisting mainly of
 personal writings in politics, prose, and poetry. All posts were
-by the same user---a critical feature of our modelling approach.
+by the same user---a critical feature of our model.
 
 To limit ourselves to ``important'' posts, we dropped all posts
-with fewer than 20 words. We randomly chose 20\% to hold as a test
-set to evaluate our model's performance
+with fewer than 20 words. We randomly chose 20\% of posts to hold
+as a test set to evaluate our model's performance
 
 \subsection{Feature Extraction}
 To parse the data into sentences and words, we used the standard
@@ -173,26 +263,27 @@ Punkt sentence tokenizer in NLTK~\citep{bird09}. To reduce data
 sparsity, we ran the Porter stemmer and removed stemmed stopwords.
 \fix{TODO: ADD COUNTING STATISTICS.}
 
-\section{Experiments} 
+\section{Results} 
 A simple single-core Python implementation of Gibbs sampling for
 SubjLDA processed on average 2,715.8 words per second, which comes
 to 26.0 seconds per iteration for the poetry blog of 1036 posts.
-We ran experiments overnight on an eight-core Amazon EC2 high-CPU
-instance.
-
-\section{Results}
-
-PUT TABLES OF INFERRED RESULTS
-
-PUT HISTOGRAMS OF TOPICS FOR ONE RUN
-
+For each of the three blogs (politics, prose, poetry), we ran 400
+Gibbs sampling iterations overnight on an eight-core Amazon EC2
+high-CPU instance. Convergence was diagnosed by eyeball.
 PUT A LOG LIKELIHOOD OF SOMETHING.
 
-\subsection{Evaluation}
-Lin did not derive a conditional distribution for the likelihood
-of SubjLDA, so we derive it here.
+\subsection{Highly Probable Words}
+The following lists the most frequently occuring words for each
+emotion. The words coming from Wordnet-Affect are bolded. Thus,
+the model learned personally-relevant emotional words from the data.
+PUT TABLES OF INFERRED RESULTS
 
-Our metric is the perplexity of the test set \citep{blei03}.
+Furthermore, the model successfully chose sparse topic-word
+and document-topic representations.
+PUT HISTOGRAMS OF TOPICS FOR ONE RUN
+
+\subsection{Evaluation}
+For each model, we report the perplexity of the test set \citep{blei03}.
 Intuitively, if probability model assigns high probabilities to
 newly observed events, then the exponent term is large, so the
 perplexity is low. The model is less ``surprised'' by the new
@@ -200,23 +291,71 @@ information and in fact already predicted something close. Since
 perplexity is evaluated on a test set, lower perplexity implies
 better generalization.
 \begin{equation}
-perp(D_{test}) = \exp\left{{-\frac{\sum_{d=1}^M \log{p(\mathbf{w}_d)}}{\sum_{d=1}^N N_d}}\left}
+perp(D_{test}) = \exp{\left(-\frac{\sum_{d=1}^M \log{p(\mathbf{w}_d)}}{\sum_{d=1}^N N_d}\right)}
 \end{equation}
-where $\mathbf{w}_d$ denotes the bag-of-words representation for
-document $d$. We both models, we compare against a baseline model
-based on our knowledge from Wordnet-Affect and SentiWordNet. If we
-denote by $N_k$ as the count of unique words in our corpus with
-label $k$ and $N$ as the total number of words in the corpus, then
-the probability of observing any word is
+where $\mathbf{w}_d$ denotes the sequence of words for document
+$d$. We compare both models against a baseline model based on our
+knowledge from Wordnet-Affect and SentiWordNet. If we denote by
+$N_k$ as the count of unique words in our corpus with label $k$ and
+$N$ as the total number of words in the corpus, then the probability
+of observing any word is
 \begin{equation}
 p(w) = \begin{cases} 1 / \left( {C_{\mathcal{E}(w)}} \right) & \mbox{if } w \mbox{ is labelled} \\
                      1/ N \mbox{ otherwise }
        \end{cases}
 \end{equation}
 where $\mathcal{E}(w)$ denotes the emotion of word $w$ (where the
-default emotion is neutral), if we have a prior label on $w$.
+default emotion is neutral), if we have a prior label on $w$. Thus,
+perplexity improvements over this baseline shows that our model has
+learned from the data.
 
-PUT TABLE HERE.
+First, at the end of the Gibbs sampling, we obtain maximum a
+posteriori estimates of the model parameters $\mathbf{\Pi}$,
+$\mathbf{\Theta}$, and $\mathbf{\Phi}$ from the samples. This is
+easy to do because each parameter is a matrix of multinomial
+proportions, which we estimate by smoothing sample means with our
+priors. We present Lin's results here~\citep{lin03}.
+
+Let $\pi_{d,j}$ denote the probability that sentences in document
+$d$ takes subjectivity $j$, $\theta_{d,m,k}$ denote the probability
+that a word in sentence $m$ of document $j$ takes sentiment $k$,
+and $\phi_{k,t}$ denote the probability a word of sentiment $k$ is
+word $t$. Then the MAP estimates for our model parameters are
+\begin{align}
+\pi_{d,j}      &= \frac{N_{d,j} + \gamma}{N_d + K\gamma} \\
+\theta_{d,m,k} &= \frac{N_{d,m,k} + \alpha_{s_{d,m},k}}{N_{d,m} + \sum_{j=1}^S \alpha_{s_{d,m},k}} \\
+\phi_{k,t}     &= \frac{N_{k,t} + \beta_{k,t}}{N_k + \sum_{t=1}^V \beta_{k,t}}
+\end{align}
+where $N_{\mathbf{x}}$ denotes the count of all words matching
+index $\mathbf{x}$, $S$ is the number of sentiments, nad $V$ is the
+vocabulary size.
+
+\subsection{Derivation of SubjLDA's Likelihood on New Data}
+Next, as Lin did not derive a conditional distribution for the
+per-document likelihood of SubjLDA, so we derive it here. Given the
+above MAP estimates of these model parameters, we simply marginalize
+over the subjectivity labels $\mathbf{s}$ and sentiment labels
+$\mathbf{k}$. SubjLDA assumes that given a document, per-sentences
+subjectivity labels are drawn i.i.d., and given a sentence, per-word
+sentiment labels are drawn i.i.d.
+
+There is one caveat: $\mathbf{\Theta}$, is a dummy variable,
+parameterized, by a document and sentence counts in the training
+set. Thus, at the end of training, we re-estimate the Dirichlet prior
+$\mathbf{\alpha}$ from $\mathbf{\Theta}$ and compute the likelihoods
+of new data using the updated $\mathbf{\alpha}$.
+
+Let $M$ denote the number of sentences in a document, $N_m$ denote
+the number of words in sentence $m$, and $w_{m,n}$ denote the word
+at position $n$ in sentence $m$. Then the likelihood of a new
+document $\mathbf{w}$ is
+\begin{align} \label{eqn:subjlda-likelihood}
+P(\mathbf{w} | \mathbf{\Pi,\Theta,\Phi,\alpha,\beta,\gamma}) 
+    &= \prod_{m=1}^M \sum_{l=1}^L \prod_{n=1}^N \sum_{k=1}^K P(w_{m,n} | k, \mathbf{\Phi} ) P( k | \theta ) P ( \theta | \mathbf{\alpha}_l \\
+    &= \prod_{m=1}^M \sum_{l=1}^L \prod_{n=1}^N \sum_{k=1}^K \phi_{k,w_{m,n}} \theta_k \frac{\prod_{k=1}^K \Gamma(\alpha_{l,k})}{\Gamma \left( \sum_{k=1}^K \alpha_{l,k} \right)} \prod_{k=1}^K \theta_k^{\alpha_{l,k} - 1} \\
+    &= \prod_{m=1}^M \sum_{l=1}^L \prod_{n=1}^N \sum_{k=1}^K \phi_{k,w_{m,n}} \mbox{Dir} \left( \alpha_{l,1}, \ldots, \alpha_{l,k} + 1, \ldots, \alpha_{l,K} \right)
+\end{align}
+which is simple to evaluate.
 
 \section{Post-Mortem}
 While the results for this project were not quite as I had hoped,
@@ -224,9 +363,9 @@ I've certainly learned a lot from doing this work.
 
 First, as described in the abstract, \emph{immature} really does
 capture the state of the art in web sentiment analysis. Several
-well-cited approaches, including \citep{mishne06, alm08, sood08}
+well-cited approaches, including \citep{mishne06, alm08, sood09}
 employ elementary techniques: \citep{mishne06} uses linear regression
-with automatic feature selection; \citep{sood08} uses straight
+with automatic feature selection; \citep{sood09} uses straight
 k-means. While these discriminative models successfully classify
 these selected datasets, they give little insight as to the
 dynamics of a single person's emotional state. Thus, they are of
@@ -252,11 +391,10 @@ these hopes are a bit beyond the time for this field.
 
 Second, I learned just how much of a pain it is to deal with all
 but the most trivial of datasets. Many results were obtained with
-a 8.1 million-post Livejournal corpus. This data if especially
-important because Livejournal users can optionally tag posts with
-a \emph{mood}, providing a huge labelled dataset\citep{mischne2005}.
+a 8.1 million-post Livejournal corpus. I had wanted to compare my
+my unsupervised approaches with a more typical SVM formulation.
 Though many papers used this dataset, after hours of crawling the
-web, a download was nowhere to be found.
+web, I was unable to find a download for myself.
 
 Other datasets were not trivial to acquire or use. Many required
 filling out a registration form and waiting for days \citep{baccianella10}.
