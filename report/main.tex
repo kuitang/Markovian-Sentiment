@@ -276,12 +276,11 @@ sparsity, we ran the Porter stemmer and removed stemmed stopwords.
 \section{Results} 
 A simple single-core Python implementation of Gibbs sampling for
 SubjLDA processed on average 2,715.8 words per second, which comes
-to 26.0 seconds per iteration for the poetry blog of 1036 posts.
-For each of the three blogs (politics, prose, poetry), we ran 400
-Gibbs sampling iterations overnight on an eight-core Amazon EC2
-high-CPU instance. The largest dataset, pantslessprogressive.com,
-over 24 hours to reach 400 iterations. No effort was made to
-diagnose convergence, though there should have been.
+to 26.0 seconds per iteration for the poetry blog of 1325 posts.
+For each of the three blogs, we ran 400 Gibbs sampling iterations
+of both LDA and SubjLDA. The largest dataset, pantslessprogressive.com,
+over 24 hours to reach 400 iterations. No effort was made to diagnose
+convergence, though there should have been.
 
 \subsection{Highly Probable Words}
 \begin{table}
