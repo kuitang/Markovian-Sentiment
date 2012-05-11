@@ -1,0 +1,16 @@
+Final project for Data Driven Modelling.
+
+Paper is in report/main.pdf.
+
+Finished runs used as results for the paper live in paper_data/
+
+Screen scrapes are not included, but you can run scrape.sh to obtain them 
+on your own.
+
+The following non-default libraries are required to run:
+
+matplotlib
+numpy
+scipy
+nltk -- including punkt tokenizer and stopwords corpora, separate download.
+unidecode
