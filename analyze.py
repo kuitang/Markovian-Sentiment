@@ -88,9 +88,9 @@ def make_common_ll(blog, alpha, phi):
                 I = np.zeros(K)
                 I[k] = 1
                 t1 = gamma(np.sum(alpha_row)) / np.prod(gamma(alpha_row))
-                t2 = np.prod(gamma(alpha_row + I)) / gamma(np.sum(alpha_row + K))
+                t2 = np.prod(gamma(alpha_row + I)) / gamma(np.sum(alpha_row + I))
                 this_like += t1 * t2
-            ll -= this_like
+            ll += np.log(this_like)
         return ll
 
     return log_likelihood
