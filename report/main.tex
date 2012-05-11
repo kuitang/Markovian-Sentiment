@@ -18,7 +18,7 @@
 \newcommand{\comment}[1]{}
 \DeclareMathOperator*{\argmax}{arg\,max}
 
-\title{Semi-Supervised Multidimensional Personal Emotion Classification}
+\title{Personalized Emotion Classification with Latent Dirichlet Allocation}
 
 \author{
 Kui Tang\\
@@ -45,21 +45,19 @@ Columbia University, New York, NY 10027, USA\\
 \maketitle
 
 \begin{abstract}
-Modelling emotional data is a relatively immature field. Most
-approaches focuses on \emph{sentiment analysis}, a binary (negative
-or positive) classification of emotion. Moreover, most applications
-only care about aggregating of global sentiment, ignoring sentiments
-of individual users.  Applications in human-computer interaction
-and recommendation systems for web applications can benefit from
-the machine's knowledge of the particular user's emotional state.
-However, high quality mutimodal labelled corpora are difficult to
-find. In this project, we derive a personal emotional lexicon from
-Tumblr blogs, data sources rich in emotional content. We take a
-semi-supervised approach with latent Dirichlet allocation (LDA) and
-a derivative, SubjLDA, initializing our model with labelled emotional
-words with a small non-domain-specific lexicon and allowing the
-model to classify the remaining words and documents into emotional
-categories.
+The inability for machines to infer emotion handicaps user interaction
+in all applications and limits accuracy of applications that monitor
+human behavior, such as anti-fraud systems. Related work centers
+on one-dimensional representations of emotion as well as time-series
+analysis of aggregate sentiment of many people, both of which offer
+limited utility to a designer of emotionally-aware applications.
+In this project, we derive a personal, probabilistic emotional
+lexicon from Tumblr blogs. This lexicon can then be used to infer
+future emotional state. We take a semi-supervised approach with
+latent Dirichlet allocation (LDA) and a derivative, SubjLDA,
+initializing our model with labeled emotional words with a small
+non-domain-specific lexicon and allowing the model to classify the
+remaining words and documents into emotional categories.
 \end{abstract}
 
 \section{Introduction}
@@ -75,9 +73,30 @@ directed by it.
 
 \hspace{9 cm} --- Hume \citep{hume}
 \end{quote}
-As a person is ultimately driven to action based on emotion, 
-
 \label{sec:introduction}
+
+As Humean are ultimately motivated by emotion, applications concerned
+with user behavior, from recommender engines to email clients to
+anti-fraud systems find the need for knowledge of a user's emotional
+state. Here, we confront a basic problem of inferring a user's
+emotional state from text.
+
+Given a set of blog posts from one user, we wish to learn a
+personalized, probabilistic lexicon of emotion. Certain words such
+as `love' and `fear' clearly signify a particular emotion.  However,
+manually curated lexica are sparse, and each person uses language
+in a slightly different way and carries unique connotations. A
+medical student write about her work experiences at the hospital,
+thereby associating the word `hospital' with aspiration and career
+success. But most people associate hospitals with fear and uncertainty.
+Thus, in a similar situation as speech recognition, applications
+that attempt to infer the user's emotional state should improve
+their performance when trained user-specific data.
+
+In this project, we start with a small, hand-labeled lexicon of
+emotional words as a baseline. We compare this baseline against two
+topic models adapted for emotional classification and show significant
+improvements against baseline.
 
 \subsection{Related Work}
 The explosion of social media---particularly (micro)blogs, product
@@ -94,7 +113,7 @@ start with merely two mood states, multidimensional analyses begin
 with lists of seed words for each emotional dimension of interest.
 The earliest standard lexicon is the the art is the \emph{Profile
 of Mood states} \citep{mcnair71}, a psychological survey that
-includes 65 items labelled across six distinct states. Bollen et
+includes 65 items labeled across six distinct states. Bollen et
 al. extend this list to a lexicon of 964 terms by adding co-related
 words appearing in Google's n-gram data and use this data to regress
 DJIA closing prices against a time series of aggregate inferred
@@ -116,39 +135,6 @@ post intensity, hour of the day, and frequencies of individual
 terms. Sood and Vasserman use k-means to compactify the set of 142
 mood descriptors into just 3 (happy, sad, angry) and apply Naive Bayes
 with the new labels.
-
-Finally, \emph{supervised LDA} models document classification onto
-predefined labels as a regression problem with a categorical response.
-Blei et al. show an improvement in per-word likelihood on movie reviews
-and Digg data compared to LDA.~\citep{blei07}.
-
-\section{Problem Description}
-The above work handles on \emph{aggregate} sentiment analysis, which
-is great for marketing and stock trading, but less applicable to
-\emph{affective computing}. Rosalind~\citep{picard97} argues that because emotions
-are essential to human reasoning, learning, and pattern recognition,
-if we wish to develop more natural, human-like behavior in machines,
-we must equip machines with emotional intelligence.
-A basic problem which we confront in this project is to learn a
-user's emotional state from text. Only with knowledge of how a user
-feels can machines produce emotionally intelligent responses.
-
-Given a set of blog posts from one user, we wish to infer a
-personalized, probabilistic lexicon of emotion. Certain words such
-as `love' and `fear' clearly signifiy a particular emotion.  However,
-manually curated lexica are sparse, and each person uses language
-in a slightly different way and carries unique connotations. A
-medical student write about her work experiences at the hospital,
-thereby associating the word `hospital' with aspiration and career
-success. But most people associate hospitals with fear and uncertainty.
-Thus, in a similar situation as speech recognition, applications
-that attempt to infer the user's emotional state should improve
-their performance when trained user-specific data.
-
-In this project, we start with a small, hand-labelled lexicon of
-emotional words as a baseline. We compare this baseline against two
-topic models adapted for emotional classification to show a performance
-increase after training on user-specific texts.
 
 \section{Models}
 \subsection{Latent Dirichlet Allocation}
@@ -203,7 +189,7 @@ sentiment. The prior $\gamma$ controls the mixing coefficients of
 subjectivity labels (subjective or objective). Thus, our priors
 capture the asymmetry of sentiment: that objective and subjective
 sentences are not equally prevalent, that most words are neutral,
-and that words may nobe be distributed uniformly across emotions.
+and that words may not be distributed uniformly across emotions.
 Further details on these priors below.
 
 Let $\mathbf{w}$ denote a bag-of-words vector of words, $\mathbf{s}$
@@ -221,18 +207,19 @@ distributions for each sentiment and subjectivity label and thus
 build a Gibbs sampler. For details, see~\citep{lin03}.
 
 \subsection{Priors}
-We follow Lin's approach to implement semi-supervised learning via
-empirical Bayes, initializing the latent variables and model priors
-using existing corpora. We use the words under the {\sc emotion}
-label in WordNet-Affect 1.0 \citep{strapparava04}, which provides
-606 words labelled with one of ``anger'', ``disgust'', ``fear'',
-``joy'', ``sadness'', ``surprise''. We also used the neutral words
-from SentiWordNet~\citep{baccianella10}, the same source as Lin.
+\label{sec:priors}
+We follow Lin's approach to implement semi-supervised learning,
+initializing the latent variables and model priors using existing
+corpora. We use the words under the {\sc emotion} label in
+WordNet-Affect 1.0 \citep{strapparava04}, which provides 606 words
+labeled with one of ``anger'', ``disgust'', ``fear'', ``joy'',
+``sadness'', ``surprise''. We also used the neutral words from
+SentiWordNet~\citep{baccianella10}, the same source as Lin.
 
 For each word in the training set, if we found that word in either
 prior lexicon, we set the appropriate sentiment label. If a sentence
-contained any non-neutral words, we labelled that sentence subjective.
-Otherwise, we labelled the sentence objective.
+contained any non-neutral words, we labeled that sentence subjective.
+Otherwise, we labeled the sentence objective.
 
 If a word was not matched by emotion or neutrality (rare; less than
 10\%) of the time, we randomly assigned it an emotion.
@@ -254,7 +241,15 @@ performed with lxml.
 
 For these results, we analyzed three blogs, consisting mainly of
 personal writings in politics, prose, and poetry. All posts were
-by the same user---a critical feature of our model.
+by the same user, a critical feature of our model. 
+summarizes our data.
+
+Because many Tumblr posts are short or contain only images or links,
+they are not suitable for lexical analysis. Thus, we dropped all
+posts with fewer than 20 words. Table~\ref{tab:data} gives a
+sense for the scope of our data, after cleaning. We randomly chose
+20\% of posts to hold as a test set to evaluate our model's
+performance.
 
 \begin{table} 
 \centering
@@ -267,10 +262,6 @@ pantslessprogressive.com & politics & 4,736 & 360,886 & 28,592 \\
 \end{tabular}
 \caption{Sizes of our data sets, after stemming and removing stopwords and short posts.\label{tab:data}}
 \end{table}
-
-To limit ourselves to ``important'' posts, we dropped all posts
-with fewer than 20 words. We randomly chose 20\% of posts to hold
-as a test set to evaluate our model's performance
 
 \subsection{Feature Extraction}
 Both LDA and SubjLDA represent the document as a bag of words.  In
@@ -289,9 +280,8 @@ to 26.0 seconds per iteration for the poetry blog of 1036 posts.
 For each of the three blogs (politics, prose, poetry), we ran 400
 Gibbs sampling iterations overnight on an eight-core Amazon EC2
 high-CPU instance. The largest dataset, pantslessprogressive.com,
-took 24 hours to reach 400 iterations. Had there been more time,
-we would have diagnosed convergence to determine the necessary
-number of iterations.
+over 24 hours to reach 400 iterations. No effort was made to
+diagnose convergence, though there should have been.
 
 \subsection{Highly Probable Words}
 \begin{table}
@@ -364,6 +354,16 @@ prior lexicon; red words changed labels during training.\label{tab:words}}
 \multicolumn{7}{c}{ \sc SubjLDA on pantslessprogressive.com }\\
 \sc neutral & \sc anger & \sc disgust & \sc fear & \sc joy & \sc sadness & \sc surprise \\
 \hline
+said & photo & al & 000 & n't & new & know \\
+peopl & imag & \textcolor{BrickRed}{\textbf{live}} & 1 & \textcolor{BrickRed}{\textbf{get}} & york & \textcolor{ForestGreen}{\textbf{get}} \\
+one & \textcolor{ForestGreen}{\textbf{see}} & post & \textcolor{ForestGreen}{\textbf{attack}} & \textcolor{ForestGreen}{\textbf{like}} & \textcolor{BrickRed}{\textbf{near}} & ita \\
+state & \textcolor{BrickRed}{\textbf{feel}} & video & rep & \textcolor{ForestGreen}{\textbf{look}} & water & think \\
+would & much & libya & coast & thing & u & donat \\
+govern & news & abdi & ivori & \textcolor{BrickRed}{\textbf{see}} & \textcolor{ForestGreen}{\textbf{feel}} & go \\
+presid & stori & facebook & 2 & \textcolor{ForestGreen}{\textbf{live}} & c & say \\
+year & \textcolor{ForestGreen}{\textbf{hate}} & syrian & 100 & donat & o & \textcolor{BrickRed}{\textbf{like}} \\
+protest & \textcolor{ForestGreen}{\textbf{despit}} & updat & bachmann & \textcolor{ForestGreen}{\textbf{give}} & \textcolor{ForestGreen}{\textbf{tear}} & paul \\
+say & \textcolor{BrickRed}{\textbf{charg}} & twitter & john & \textcolor{ForestGreen}{\textbf{good}} & romney & palin \\
 \multicolumn{7}{c}{ } \\
 \multicolumn{7}{c}{ \sc LDA on pantslessprogressive.com }\\
 \sc neutral & \sc anger & \sc disgust & \sc fear & \sc joy & \sc sadness & \sc surprise \\
@@ -382,13 +382,13 @@ time & agent & uu & anti-govern & say & earn & \textcolor{BrickRed}{\textbf{plea
 \caption{Top 10 most probable words for pantslessprogressive.com. Bold words appear in the prior lexicon. Green words have the same label in the prior lexicon; red words changed labels during training.}
 \end{table}
 
-Table~\ref{tab:words} lists the most frequently occuring words for
-each emotion. The words coming from Wordnet-Affect are bolded. The
-prevalance of non-bold words indicate that the models learned from
+Table~\ref{tab:words} lists the most frequently occurring words for
+each emotion. The words appearing in WordNet-Affect are bolded. The
+prevalence of non-bold words indicate that the models learned from
 the data.
 
 In particular, the politics blog, pantslessprogressive.com, is over
-four times larger than the other datases, and consequently contains
+four times larger than the other dataset, and consequently contains
 fewer bolded words, showing on this particular corpus, the learned
 emotional words were more significant than those from the prior
 lexicon.
@@ -402,12 +402,13 @@ expectations are negative. The WordNet-Affect creators categorized
 ``expect'' as \textsc{joy}. Clearly not everybody is optimistic as
 they are, exemplifying the need for personalized sentiment analysis.
 
-\begin{figure}[h]
+\begin{figure}
 \centering
 \includegraphics[width=\textwidth, trim=15mm 0mm 40mm 0mm, clip]{sentiment_heatmap}
 \caption{Word mixing proportions in the SubjLDA model for each
-sentiment for noconsensusonaname.tumblr.com. The bottom axes to
-ordered by decreasing frequency. Most words belong to few sentiments.
+sentiment for noconsensusonaname.tumblr.com. Words are plotted on
+the bottom axis, ordered by decreasing frequency. Because most vertical
+bands have few colors, words are sparsely mixed among topics.
 \label{fig:sparse}}
 \end{figure}
 
@@ -421,33 +422,31 @@ For each model, we report the perplexity of the test set \citep{blei03}.
 Intuitively, if probability model assigns high probabilities to
 newly observed events, then the exponent term is large, so the
 perplexity is low. The model is less ``surprised'' by the new
-information and in fact already predicted something close. Since
-perplexity is evaluated on a test set, lower perplexity implies
-better generalization.
+information---in fact, it is more likely to predict this new
+information. Since perplexity is evaluated on a test set, lower
+perplexity implies better generalization.
 \begin{equation}
 perp(D_{test}) = \exp{\left(-\frac{\sum_{d=1}^M \log{p(\mathbf{w}_d)}}{\sum_{d=1}^N N_d}\right)}
 \end{equation}
 where $\mathbf{w}_d$ denotes the sequence of words for document
 $d$.
 
-Our baseline is the labels from Wordnet-Affect and SentiWordNet
+Our baseline is the labels from WordNet-Affect and SentiWordNet
 alone.  We must formulate this baseline as a generative model in
-order to compute perplexity. We allow the baseline a trivial training
-step to label each sentiment word in training corpus as it is able
-to, and then for each sentiment $k$, compute its frequency $f_k$
-in training corpus.  Then, for each word index $i$, we draw a
-sentiment label $k_i$ with probability $f_{k_i} / V$, where $V$ is
-the size of the corpus vocabulary. Next, draw a word $w_i$ from the
-sentiment $k_i$'s list with probability $g_{w_i} / f_{k_i}$. The
-likelihood of observing any one word is thus
+order to compute perplexity. To do so, we allow the baseline a
+trivial training step to label each sentiment word in training
+corpus as it is able to, and then for each sentiment $k$, compute
+its frequency $f_k$ in training corpus.  Then, for each word index
+$i$, we draw a sentiment label $k_i$ with probability $f_{k_i} /
+V$, where $V$ is the size of the corpus vocabulary. Next, draw a
+word $w_i$ from the sentiment $k_i$'s list with probability $g_{w_i}
+/ f_{k_i}$. The likelihood of observing any one word is thus
 \begin{equation} \label{eqn:base-likelihood}
 \begin{aligned}
 p(w) &= \sum_{k=1}^K p(w|k) p(k) \\
      &= \sum_{k=1}^K \frac{g_w}{V}
 \end{aligned}
 \end{equation}
-provided $w$ exists in the lexicon. If not, then we simply assign
-$p(w) = 1/V$. That is, we assume new words do not enter.
 
 \subsection{Derivation of SubjLDA's Likelihood of New Data}
 As Lin did not derive a conditional distribution for the per-document
@@ -482,7 +481,7 @@ vocabulary size.
 There is one caveat: $\mathbf{\Theta}$ is a dummy variable,
 parameterized by a document and sentence counts in the training
 set. In the likelihood formula for new data, we analytically integrate
-out $\Theta$ and perform our estimations from $\alpha$, reestimated
+out $\Theta$ and perform our estimations from $\alpha$, re-estimated
 by maximum likelihood from the sampling results at the end of training.
 
 Let $M$ denote the number of sentences in a document, $N_m$ denote
@@ -517,28 +516,56 @@ P(\mathbf{w} | \theta, \mathbf{\Phi}, \alpha, \beta )
 \end{equation}
 
 \subsection{Perplexity Results and Discussion}
-Figure~\ref{tab:perp} shows that while SubjLDA achieved an order
-of magnitude improvement in the medium (poetry) dataset, but actually
-underperformed LDA on the small (prose) dataset. Both model so
-substantially better than the baseline.
-
 \begin{table}
 \centering
 \begin{tabular}{l c c c}
 \bf Dataset & \bf Baseline & \bf LDA & \bf SubjLDA \\
 \hline
-thenatureofdaylight.tumblr.com & $3.067 \times 10^{23}$ & $2.494 \times 10^{-19}$ & $\mathbf{3.679 \times 10^{-18}} $ \\
-noconsensusonaname.tumblr.com & $1.950 \times 10^{19}$ & $\mathbf{2.393 \times 10^{-17}}$ & $2.664 \times 10^{-17}$ \\
-pantslessprogressive.com & 0 & 0 & 0 \\
+thenatureofdaylight.tumblr.com & $219.0$ & $1.074 \times 10^{-3}$ & $1.650 \times 10^{-3}$ \\
+noconsensusonaname.tumblr.com  & $747.9$ & $7.155 \times 10^{-4}$ & $7.302 \times 10^{-4}$ \\
+pantslessprogressive.com       & $422.5$ & $5.163 \times 10^{-4}$ & $5.334 \times 10^{-4}$ \\
 \end{tabular}
 \caption{Perplexity measures for each dataset and each model.\label{tab:perp}}
 \end{table}
+Figure~\ref{tab:perp} shows that while both LDA and SubjLDA achieve
+orders of magnitude improvement over the baseline, SubjLDA actually
+slightly underperforms LDA on all three datasets.
 
+While disappointing from the point of view of SubjLDA, these results
+simply say that, when applied to in this semi-supervised context,
+plain LDA marginally outperforms the more complicated (and slower)
+SubjLDA. In other words, we were unable to replicate Lin's results
+on our Tumblr dataset, using the 6 emotion categories from
+WordNet-Affect.
 
-\begin{small}
-\bibliographystyle{plainnat}
-\bibliography{refs} 
-\end{small}
+However, the significant improvement of both models over the baseline
+indicate that solution to evaluating the emotional content of
+a person's writing already exists: just use LDA.
+
+We end this paper by noting that perplexity, though a standard,
+well-behaved metric is an unsuitable choice for evaluating emotion
+models. Perplexity measures the inverse likelihood of an entire
+sequence of words given a trained model. However, unlike more general
+problems of topic modeling, we interested only in how closely our
+model can generate representative \emph{emotional} text rather than
+evaluate its performance on generating all text.  As discussed in
+Section~\ref{sec:priors}, one of our our datasets, fully 83.6\% of
+words in the corpus appeared as neutral words in SentiWordNet.
+Thus, perplexity unnecessarily penalizes emotion models for
+potentially inaccurate models of neutral text. This is especially
+problematic given possibly great asymmetry between neutral and
+non-neutral terms. But on the other hand, neutrality is significant
+as it indicates \emph{lack} of emotion, so we cannot simply modify
+our likelihood functions to ignore the contribution of neutral terms;
+that would also violate model assumptions by positing that a user
+never is neutral.
+
+In general, supervised learning is not suitable for personal emotion
+classification, because at the beginning of inference for a particular
+user, no labeled text for that user exists. However, an application
+that learns its user's sentiment online could provide feedback of
+its inference to the user and improve via reinforcement learning.
+
 \section*{Appendix: Post-Mortem}
 While the results for this project could have been better, I've
 certainly learned a lot from doing this work.
@@ -579,8 +606,13 @@ web, I was unable to find a download for myself.
 Other datasets were not trivial to acquire or use. Many required
 filling out a registration form and waiting for days \citep{baccianella10}.
 The data came in a hodge-podge of text formats, requiring lots of
-crufy parsing code, a distraction from the real data-driven modelling.
-Scraping your own textual data doesn't give you labels, preventing
-access to supervised methods.
+crufty parsing code, a distraction from the real data-driven modeling.
+Scraping your own textual data doesn't give you labels, precluding
+supervised methods.
+
+\begin{small}
+\bibliographystyle{plainnat}
+\bibliography{refs} 
+\end{small}
 \end{document}
 

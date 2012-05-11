@@ -117,7 +117,7 @@ def make_lda_ll(blog, mygamma=0.001):
 
 def perplexity(log_likelihood, blog):
     top = sum(log_likelihood(d) for d in blog.test_docs)
-    bot = sum(len(d) for d in blog.test_docs)
+    bot = sum(len(s) for d in blog.test_docs for s in d)
     return np.exp(- top / bot)
 
 def analyze_common(blog):
