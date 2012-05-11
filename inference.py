@@ -71,6 +71,9 @@ def update_alpha(alpha, theta, sentence_subj, reset_alpha=False, stepsize=.1, to
 #            print log_p
 #            print 'alpha[%d] = %s'%(k, alpha[k])
 #            print 'log_p[%d] = %s'%(k, log_p)
+#            print np.shape(M*psi(np.sum(alpha[k])))
+#            print np.shape(M*psi(alpha[k]) )
+#            print np.shape(M*log_p)
             g = M*psi(np.sum(alpha[k])) - M*psi(alpha[k]) + M*log_p
             # Diagonal
             q = -M * polygamma(1, alpha[k])
@@ -92,7 +95,7 @@ def update_alpha(alpha, theta, sentence_subj, reset_alpha=False, stepsize=.1, to
     assert(np.all(alpha > 0))
     return alpha
 
-def update_one_alpha(alpha, theta, stepsize=.1, tol=1e-14):
+def update_one_alpha(alpha, theta, stepsize=.01, tol=1e-14):
 # Newton method in [Minka00]
 # NOTE: Need a small stepsize to prevent negative valued alpha
 # (I haven't thought about why yet... isn't the log likelihood convex?)
@@ -102,14 +105,18 @@ def update_one_alpha(alpha, theta, stepsize=.1, tol=1e-14):
     while True:
         oldnorm = np.linalg.norm(alpha)
         g = D*psi(np.sum(alpha)) - D*psi(alpha) + D*log_p
-        print log_p.shape
+#        print log_p.shape
         # Diagonal
         q = -D * polygamma(1, alpha)
         z = D * polygamma(1, np.sum(alpha))
         b = np.sum(g / q) / (1.0 / z + np.sum(1.0 / q))
-
-        print "%s - %s"%(alpha, stepsize * (g - b) / q)
-        alpha -= stepsize * (g - b) / q
+#        print 'g = %s, q = %s, z = %s, b = %s'%(g, q, z, b)
+#        print 'g - b = %s', (g - b)
+#        print '(g - b) / q = %s', (g - b) / q 
+#
+#        print np.shape(stepsize)
+#        print "%s - %s"%(alpha, stepsize * (g - b) / q)
+        alpha -= stepsize * ((g - b) / q)
 
         if abs(np.linalg.norm(alpha) - oldnorm) < tol:
             break

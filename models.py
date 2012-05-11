@@ -182,6 +182,12 @@ class Blog(object):
     def avg_len(self):
         return sum(len(d) for d in self.docs) / float(len(self.docs))
 
+    def perplexity(self):
+        pass
+
+    def perplexity_lda(self):
+        pass
+
     def vectorize_test_set(self):
         pass
 
